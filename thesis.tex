@@ -232,19 +232,6 @@ Most of these systems require changes to the existing scientific workflow, requi
 Our goal is to design and implement a lightweight, general purpose provenance system that has a minimum barrier to entry in the context of scientific computing.
 To this end, we have designed OPUS, a provenance system that has been designed to work entirely in user-space and is based on several key design principles discussed in the next section ~\ref{sec:constraints}.
 
-%\begin{itemize}
-%\item Today all the physical sciences are computation based. The results and research outcomes produced are strongly dependant on the correctness of data and computations. 
-%\item We need a mechanism to reason about the trustworthiness of data and of computation. In this chapter we describe OPUS, which is a system for provenance capture, analysis and query.
-%\item We've specifically targeted scientific applications as there is a pressing need for provenance to build tools for reproducibility, reason about trust/confidence in results
-%and share or archive experiments for reference.
-%\item We've seen a number of approaches previously towards implementing general purpose provenance capture and query systems.
-%\item Most of these systems have resulted in prototype implementations which have lacked adoption in the real-world.
-%\item This is because these systems are not widely available or easily deployable.
-%\item Most of these systems require changes to the existing workflow, require specialised kernels etc.
-%\item Our goal is to design and implement a lightweight general purpose provenance system that can drop into and easily integrate with existing systems.
-%\item To this end we've designed and implemented OPUS.
-%\end{itemize}
-
 \section{A unique constraint space}
 OPUS draws inspiration from previous approaches to building general purpose provenance systems but addresses the shortcomings in these systems outlined in ~\ref{sec:opusmotiv}. The design of OPUS is based on the following principles:
 
@@ -266,22 +253,94 @@ Scientific applications are typically executed multiple times and each run can p
 Existing systems record only a subset of operations applications perform on files and processes. This restricts the range of provenance queries that one can implement. To support a richer set of queries OPUS should be designed to capture all file and process mutating operations. Similarly, merely capturing file and process interactions ignores the execution context (library versions used, command line parameters used, environment variables etc.) in which these operations were done. Therefore the mechanism OPUS uses should capture the underlying execution context as well. 
 
 \item \textbf{Reasoning about provenance:}
-The ultimate goal of capturing provenance is to use the provenance to reason about application and system execution. However, provenance is itself represented as data and we require a mechanism to reason about changes made to provenance data as it is transformed. Existing systems use ad-hoc approaches to reason about the provenance data captured. In order for provenance to be useful and effective, we require a more formal approach to to reason about the provenance data itself. In the following section ~\ref{sec:pvm} we discuss PVM, a semi-formal model to reason about provenance captured.
+The ultimate goal of capturing provenance is to use the provenance to reason about application execution and data used or produced. However, provenance is itself represented as data and we require a mechanism to reason about changes made to provenance data as it is transformed. Existing systems use ad-hoc approaches to reason about the provenance data captured. In order for provenance to be useful and effective, we require a more formal approach to to reason about the provenance data itself. In the following section ~\ref{sec:pvm} we discuss PVM, a semi-formal model to reason about provenance captured.
 
 \end{itemize}
 
 \section{Reasoning About Provenance}
-The theoretical contribution of this work belongs to Thomas Bytheway.
-Acknowledge that this is joint work with Thomas Bytheway.
+Provenance systems are designed to store the history or lineage of digital entities such as files, sockets, pipes, processes etc.
+Entities are typically modelled as objects and versioned in response to modifications by operations that change their state.
+Versioning can thereby be defined as the recording of object state at semantically relevant epochs.
+The goal of versioning is to relate object state with distinct, specific time epochs in the object timeline.
+Typically, versions are chained, i.e. a version of an object links back to its previous representation.
+It also gives us a weak sense of ordering of events.
+Therefore versioning assists in reasioning about object state and is useful in optimising provenance queries.
+
+\subsection{Types of Versioning Models}
+Traditionally systems that capture and store provenance have relied on two well established versioning model.
+\texttt{Version-on-Write} and \texttt{Open-to-Close}.
+
+\paragraph{Version-on-Write:}
+Version-on-write is perhaphs the simplest versioning model where a new object version is created on every action that mutates an entity.
+It is also the easiest model to implement and reason about since each version of an object is associated with a distinct causal event in an entity's timline.
+However, creating a new object version for each write can potentially result in a large number of versions and cause in a \texttt{provenance explosion}.
+This can result in high spatial overheads for the system and make queries expensive since traversals through the resulting graph can be very long.
+Also, a scheme like version-on-write does not explicitly specify how to model operations that do not mutate an entity's state, for e.g. a \texttt{read} operation.
+Thefore such a model may not be suitable for a complete general purpose provenance system such as OPUS.
+
+\paragraph{Open-to-Close:}
+In the open-to-close approach versions are defined relative to \texttt{open} and \texttt{close} events.
+A new version of an object is typically created on the first update to a block after an \texttt{open} and all operations on that entity are then associated to that new object version until the last \texttt{close} operation is invoked.
+
+The main advantage of this versioning scheme is that we have clear start and end points for periods of manipulation of objects.
+This also results in a concise graph representation.
+However, the primary disadvantages of \texttt{open-to-close} is,
+(i) Operations that do not invoke the \texttt{open} and \texttt{close} opeartions explicitly must be adapted to use these semantics, for e.g. the \texttt{stat} operation.
+(ii) It is not possible to version on operations that cannot be implicitely or explicitely represented as an \texttt{open} and \texttt{close}.
+
+A system like OPUS that is being designed for use in the real-world must be able to model and reason about provenance for a diverse set of entities each supporting their own set of operations and semantics. Therefore a rigid scheme like \texttt{open-to-close} is insufficient to meet those requirements.
+
+\subsection{Definable Versioning Semantics}
+Both \texttt{version-on-write} and \texttt{open-to-close} versioning models have the following drawbacks:
 \begin{itemize}
-\item What is a provenance object? History or lineage of digital entities (files, sockets, pipes etc.). Entities modelled as objects and versioned.
-\item What is a provenance object version? Version of an object represents the state of an entity at a give time in its history. Versions are chained together to allow us to reason about the history of an entity in its lifetime.
-\item What versioning schemes exist? Version on write, Open-to-Close versioning.
-\item What is PVM? Definable versioning semantics.
-\item How does PVM simplify our ability to reason about provenance?
-Formalises the concept of tracking and recording changes in system entities.
-Formalises the versioning side-effects of concurrent updates to system entities.
+\item Their provenance versioning semantics is implicitly based on the underlying system semantics on which they are implemented.
+\item They are defined with focus on recording rather than logically reasoning about changes to objects.
+\item They have been defined based on the constraint that versioning will only be carried out on object mutation or dereference.
 \end{itemize}
+
+We need a more abstract, expressive and flexible versioning semantics that can be defined independently and orthoganally to the underlying system versioning semantics.
+By providing an abstarct and system decoupled versioning semantics we get the following properties:
+\begin{itemize}
+\item Extensibility - The versioning scheme is extensible to model a variety of system semantics, for example file access, network access, memory access etc.
+\item Reasoning - We can reason about the versioning semantics itself, for example to reason about completeness or consistency of the semantic.
+\end{itemize}
+
+In section ~\ref{subsec:pvm} we describe PVM, a versioning model that offers these properties.
+
+\subsection{PVM: Provenance Versioning Model}
+PVM is an elementary model designed to enable the ratification of and reasoning about update semantics in provenance systems.
+In essence PVM enables us to:
+(i) formalise the concept of tracking and recording changes in system entities (i.e. versioning) and
+(ii) formalise the versioning side-effects of concurrent updates to system entities.
+
+% TODO: Expand from here
+%Basic unit of modelling is an \texttt{object}.
+%
+%What is it?
+%A snapshot of an entity's state in a timeline.
+%
+%What do they represent in a real system?
+%Objects are modified by \texttt{processes}.
+%
+%To distinguish between the global view of the system and the local view as seen by a program we introduce the concept of global and local objects.
+%
+%PVM essentially formalises the relationship between local and global objects.
+%Introduce the concept of binding and unbinding.
+
+% Example with a simple file open and close.
+% Example with a concurrent access case, open, unlink, close.
+
+
+
+%\begin{itemize}
+%\item What is a provenance object? History or lineage of digital entities (files, sockets, pipes etc.). Entities modelled as objects and versioned.
+%\item What is a provenance object version? Version of an object represents the state of an entity at a give time in its history. Versions are chained together to allow us to reason about the history of an entity in its lifetime.
+%\item What versioning schemes exist? Version on write, Open-to-Close versioning.
+%\item What is PVM? Definable versioning semantics.
+%\item How does PVM simplify our ability to reason about provenance?
+%Formalises the concept of tracking and recording changes in system entities.
+%Formalises the versioning side-effects of concurrent updates to system entities.
+%\end{itemize}
 
 \section{Implementation}
 \begin{itemize}
