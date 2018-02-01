@@ -27,13 +27,14 @@
 
 % Citations using numbers
 \usepackage[numbers]{natbib}
+\usepackage{todonotes}
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% Thesis meta-information
 %%
 
 %% The title of the thesis:
-\title{Towards Provenance as a Construct of \\
+\title{Towards Provenance as a First Class Construct of \\
 Dependable Computing Systems}
 
 % Alternate titles
@@ -98,7 +99,7 @@ Dependable Computing Systems}
 %% Abstract:
 %%
 \abstract{%
-\begin{itemize} % TODO: this is just a placeholder
+\begin{itemize} 
 \item Provenance capture in computing systems.
 \item Use of provenance to reason about computations in the context of control flow and data flow.
 \item We provide real implementations of systems that allows us to track computations in the context of scientific computing.
@@ -155,7 +156,7 @@ Dependable Computing Systems}
 \item These computations are much more interleaved and used by each other. Take for example the 2008 debt crisis:
 \item Financial products were created on top of other financial products and derivatives and new products where nobody understood
 what they were actually representing. c.f. when people took on the product they did not understand the risk they were actually taking on.
-\item Impact of these computations ia huge. If the computation is wrong or inaccurate, it can have a huge impact on the structure of
+\item Impact of these computations is huge. If the computation is wrong or inaccurate, it can have a huge impact on the structure of
 society and/or have huge social, scientific, societal implications. Examples: e.g. Climate change controversy, Argentina Debt Crisis,
 2008 Wall Street Crash etc.
 \end{itemize}
@@ -205,7 +206,7 @@ This chapter presents the background literature in the area of provenance.
 \item Cite the Primer on Provenance paper.
 \end{itemize}
 
-\chapter{OPUS: Control-flow Provenance Support for Scientists}
+\chapter{OPUS: Provenance Support for Scientists}
 The work described in this chapter is a joint contribution with Thomas Bytheway. My primary contribution in this body of work is as follows:
 
 \begin{itemize}
@@ -225,38 +226,261 @@ These models and simulations are typically composed of multiple computational st
 Once a result is obtained and interpreted, confidence in the result is obtained by analysing, repeating and reproducing the experiment independently.
 In order to do this scientists have traditionally used manual and ad hoc techniques to record the data inputs and contexts (parameters, configuration, dependencies etc.) used in the computations to produce the result.
 This manual process is however prone to errors and often not complete, resulting in experiments not being reproducible ~\cite{non-rep, nature}. 
-Provenance systems ~\cite{PASS, BURRITO, StoyBook} have attempted to automate this effort and ease the process of reproducibility by automatically tracking data and computation.
+Provenance systems ~\cite{PASS, BURRITO, StoyBook} in the past have attempted to automate this effort and ease the process of reproducibility by automatically tracking data and computation.
 However, these systems have lacked adoption in the real-world and have merely resulted in being research or experimental prototypes.
-This is mainly because these systems are not widely available or easily deployable in practice.
-Most of these systems require changes to the existing scientific workflow, require modification to the underlying OS or require the use of specialised systems.
-Our goal is to design and implement a lightweight, general purpose provenance system that has a minimum barrier to entry in the context of scientific computing.
-To this end, we have designed OPUS, a provenance system that has been designed to work entirely in user-space and is based on several key design principles discussed in the next section ~\ref{sec:constraints}.
+This is primarily because these systems are not widely available or easily deployable in practice.
+Most of these systems require changes to the existing workflows, require modification to the underlying OS or require the use of specialised systems.
+Our goal is to design and implement a lightweight, general purpose provenance system that has a minimum barrier to entry, especially in the context of scientific computing.
+To this end, we have designed OPUS, a provenance system that is designed to work entirely in user-space and is based on several key design constraints discussed in the next section ~\ref{sec:constraints}.
 
 \section{A unique constraint space}
-OPUS draws inspiration from previous approaches to building general purpose provenance systems but addresses the shortcomings in these systems outlined in ~\ref{sec:opusmotiv}. The design of OPUS is based on the following principles:
+OPUS draws inspiration from previous approaches in building general purpose provenance systems but addresses several of their shortcomings outlined in ~\ref{sec:opusmotiv}. The design of OPUS is based on the following requiements:
 
 \begin{itemize}
 
-\item \textbf{Non-intrusive:}
-It is our observation that most computational scientists seldom have \texttt{root} or system level access to install and update software. Therefore it is important for a general purpose system to be as non-intrusive as possible i.e. the system should not require changes to the underlying OS or the use of bespoke kernel modules to capture provenance. Therefore a major design principle for OPUS is that it must work entirely in user-space. An added advantage of designing OPUS to work in user-space is that it becomes easier to ensure that in a shared system, users of OPUS not affect other users in the system.
+\item \textbf{Non-intrusiveness:}
+It is our observation that most computational scientists seldom have \texttt{root} or system level access to install and update software. Therefore it is important for a general purpose system to be as non-intrusive as possible i.e. the system should not require changes to the underlying OS or the use of bespoke kernel modules to capture provenance. Therefore a major design principle for OPUS is that it must work entirely in user-space. An added advantage of designing OPUS to work in user-space is that it becomes easier to ensure that in a shared system, users of OPUS do not affect other users in the system.
 
 \item \textbf{Ease of installation:}
-In addition to being non-intrusive a general purpose provenance system must be easy to install, i.e. the installation must be self-contained, having no external dependencies and requiring minimal configuration changes. This ensures that the barrier to adoption of such systems by users such as scientists is as low as possible.
+In addition to being non-intrusive a general purpose provenance system must be easy to install. The installation must be self-contained, having no external dependencies and requiring minimal configuration changes. This ensures that the barrier to adoption of such systems by users such as scientists is as low as possible.
 
 \item \textbf{Seamlessness:}
-Scientific computing across disciplines are diverse in terms of the workflow used, therefore a general purpose provenance system should not require the end user to modify his/her workflow in order to use the system. Therefore OPUS should be designed to drop into a user's environment and seamlessly integrate with existing workflows and capture provenance.
+Scientific computing across disciplines are diverse in terms of the workflow used, therefore a general purpose provenance system should not require the users to modify their existing workflow in order to use the system. OPUS should therefore be designed to drop into a user's environment and seamlessly integrate with existing workflows and capture provenance.
 
 \item \textbf{Low overheads:} 
-Scientific applications are typically executed multiple times and each run can perform multiple iterations until the computation converges to a specific expected result. This execution could therefore take anywhere from seconds to minutes to hours depending on the complexity of the computation performed. Therefore it is important that a provenance system like OPUS impart minimal overheads on the application run time. Similarly, the application could be executing in memory and storage constrained environments, therefore keeping the spatial overheads low is also a useful property to consider while designing the system.
+Scientific applications are typically executed multiple times and each run can perform multiple iterations until the computation converges to a specific expected result. This execution could therefore take anywhere from seconds to minutes to hours depending on the complexity of the computation performed. Therefore it is important that a provenance system like OPUS impose minimal overheads on the application run time. Similarly, the application could be executing in memory and storage constrained environments, therefore keeping the spatial overheads low is also a useful property to consider while designing the system.
 
 \item \textbf{Completeness:} 
-Existing systems record only a subset of operations applications perform on files and processes. This restricts the range of provenance queries that one can implement. To support a richer set of queries OPUS should be designed to capture all file and process mutating operations. Similarly, merely capturing file and process interactions ignores the execution context (library versions used, command line parameters used, environment variables etc.) in which these operations were done. Therefore the mechanism OPUS uses should capture the underlying execution context as well. 
+Existing systems record only a subset of operations applications perform on files and processes. This restricts the range of provenance queries that one can implement. To support a richer set of queries OPUS should be designed to capture all file and process relatede operations. Also, merely capturing file and process interactions ignores the execution context (library versions used, command line parameters used, environment variables etc.) in which these operations were done. Therefore the mechanism OPUS uses should capture the surrounding execution context as well. 
 
-\item \textbf{Reasoning about provenance:}
-The ultimate goal of capturing provenance is to use the provenance to reason about application execution and data used or produced. However, provenance is itself represented as data and we require a mechanism to reason about changes made to provenance data as it is transformed. Existing systems use ad-hoc approaches to reason about the provenance data captured. In order for provenance to be useful and effective, we require a more formal approach to to reason about the provenance data itself. In the following section ~\ref{sec:pvm} we discuss PVM, a semi-formal model to reason about provenance captured.
+\item \textbf{Reasoning about provenance:} \todo{This needs a rewrite}
+The ultimate goal of capturing provenance is to use it to reason about application execution and data used or produced. However, provenance is itself represented and stored as data, therefore we require a structured mechanism to reason about provenance data as it is recorded and stored. Existing systems are either rigid or use ad-hoc approaches to record and store provenance. In order for provenance to be useful and effective, we require a more formal approach to reason about the provenance data itself. In section ~\ref{sec:pvm} we discuss PVM, a semi-formal model for representing provenance.
 
 \end{itemize}
 
+\section{Design Decisions} \todo{Write the section on design and implementation of OPUS here}
+The design of OPUS is guided by the constraints outlined in ~\ref{sec:constspace}.
+The initial design is intended for on-host provenance capture, analysis and query.
+In this section we discuss our approach and some of the decisions involved in designing OPUS.
+
+
+\subsection{Provenance Capture}
+One of the main components in the design of OPUS is the provenance capture component.
+In the context of scientific computing, our requirement for OPUS is to employ a seamless, non-intrusive, always-on and lightweight method for provenance capture.
+To build such a system we explore several existing mechanisms to capture provenance.
+A key observation here is that most of these mechanims have conventionally been used in tracing and debugging applications.
+Since the data captured by these techniques overlaps to a considerable amount with the data required for provenance we can leverage these mechanisms to build provenance systems.
+
+\paragraph{FUSE} is a framework that allows non-privileged users to implement a custom filesystem in user-space. FUSE consists of (i) a kernel module which registers a filesystem with the kernel's virtual file system (VFS) and (ii) a user-level daemon that either implements the entire filesystem functionality or acts as a pass-through layer to a kernel filesystem. A proof-of-concept system ~\cite{StoryBook} has shown that it is possible to use this framework to capture I/O activities of applications and can be done without any modification to the application or existing workflows as perceived by the user. Therefore for OPUS, FUSE is a viable option for provenance capture. However, the use of FUSE for provenance capture has several limitations:
+(i) FUSE requires root permissions to install and configure.
+(ii) With certain workloads FUSE can impose a significant overhead on application I/O ~\cite{StoryBook}.
+(iii) FUSE only intercepts I/O activities, other crucial process level operations required to build more richer provenance is not visible to FUSE.
+
+\paragraph{PTrace} is a process tracing functionality supported on most Unix-like OSes. 
+PTrace allows a tracer process to trace the execution of a target process.
+When an event of interest (for example system calls) is executed by the target, the underlying OS stops the execution of the traget and switches control to the tracer process.
+The tracer process can then examine the register and memory state of the target process.
+This is the core mechanisms used to implement debuggers.
+This can be a useful technique to capture provenance as well since it provides complete visibility into the target program's execution.
+The primary advantage of using PTrace for provenance capture is that is does not require root permissions unless the target process is executing as root.
+However, PTrace imposes a high temporal overhead (~30\%) on the process being traced since the mechanism requires multiple context switches for each event being traced.
+This makes PTrace impractical for use in an always-on, system-wide provenance capture system.
+
+% TODO: Make this consistent with other paragraphs
+\paragraph{Kernel-level Tracing:}
+Over the years systems developers have recognised the need for a flexible tracing infrastructure for both the kernel and user-space applications.
+A number of mechanisms and tools ~\cite{DTrace, SystemTap, Uprobes, LXCModules} have been created to support this requirement.
+The core idea with these mechanisms is to provide support in the kernel to trace application activity, typically by monitoring the interaction of the application with the OS.
+The key benefits of kernel-level tracing mechanisms are that it is completely seamleass to applications, executes at a higher privilege level and therefore potentially secure from user-space attacks.
+A user will require \texttt{root} permissions to enable or configure these tracing mechanisms.
+However, the main limitation of using such an approach for provenance capture is that most of these mechanisms have been introduced fairly recently and they may not be supported in older kernel versions.
+Given that our requirement is to support scientists our initial decision is to not use such techniques for provenance capture.
+
+
+\paragraph{Binary Rewriting} is the process of transforming an application binary by modifying individual instructions to implement a specific functionality while still retaining the semantics of the original application. 
+Binary rewriting can happen either (i) statically, where the application binary is disassembled and the instructions are modified or (ii) dynamically, where the instruction stream is modified at runtime using just-in-time compilation. 
+Provenance capture can be implemented using such mechanisms wherein specific instructions (for e.g. syscall instruction) executed by the application are intercepted and captured.
+Manually implementing this correctly and in a generic manner is a difficult exercise, however, there are a number of tools and frameworks ~\cite{PIN, DynInst} that can significantly ease this process.
+Given that this mechanism can be implemented entirely in user-space it can be considered a viable method for provenance capture for a system like OPUS.
+However, for the initial design our goal is to use a quicker approach for prototyping the system, therefore binary rewriting may not be the ideal choice to implement the capture component.
+
+\paragraph{LD\_PRELOAD:} is a feature provided by the runtime linker that enables overriding of symbols in libraries linked by programs at load time. In order to override the symbols, a new library with definitions for the symbols to be overridden must be implemented and the environment variable LD\_PRELOAD set to this library path. In the context of provenance capture we can use this mechanism to interpose calls made by applications to the standard C library. Given that the standard C library is a wrapper over the system call interface, this becomes a viable method for capturing provenance at system call granularity.
+The primary advantages of the LD\_PRELOAD mechanism is that (i) it imposes a much lower overhead when compared to other user-space system call interception mechanisms and (ii) it is easier to implement and prototype since there is no special API or interface required to implement it.
+However, LD\_PRELOAD assumes that applications link with the standard C library dynamically and that system calls are always invoked by application via the C library.
+For a system that captures provenance in the context of scientific computing it is reasonable to assume that most programs dynamically link with and interface with the OS using the C library. Given that this mechanism satisfies a majority of the requirements for a lightweight, userspace provenance capture system, our decision for the first version of OPUS is to employ library interposition as a method for provenance capture.
+
+
+\subsection{Provenance Analysis} % TODO: Refine this further
+The raw provenance stream consisting of system call event data from executing programs should be converted to a meaningful representation that describes the provenance of processes, files, sockets etc.
+In previous general purpose provenance systems ~\cite{PASS, PASSv2} this has been represented as a directed acyclic graph (DAG) where the nodes represent entities such as processes and files while the edges describe the interation between these entities as shown in figure xxx.% TODO: Show a simple DAG of processes and files.
+OPUS uses a similar approach and collects event streams from processes executing on the machine and converts it into a provenance graph.
+However, unlike previous systems, OPUS uses a semi-formal model, PVM (Provenance Versioning Model) to map and model the undelying system semantics.
+PVM formalises the process by which entities in the graph are updated and allows us to reason about changes to these entities.
+PVM is discussed in detail in section~\ref{sec:PVM}
+
+\paragraph{On-host or Off-host analysis?}
+The provenance analysis component of OPUS can run on the same host where system call events are captured or off-host, on a dedicated server.
+Our initial design assumes that all event streams from a single host will be handled by an analyser instance dedicated for that host.
+However, given the context of scientific computing our goal is to make OPUS easy to adopt and minimise the barrier to entry, to this end our initial version of OPUS will run the analysis component on the same host where capture is performed.
+
+\paragraph{Event Ordering:}
+Maintaining a correct view of order of events in the system is important for provenance systems since small changes in the order of events can produce significant semantic changes to the graph being generated.
+For example, consider two events in the system, event \texttt{E1} where a process \texttt{P1} opens a file \texttt{F} to write to it and another event \texttt{E2} wherein a process \texttt{P2} unlinks \texttt{F}.
+In such situations, processing events in the correct order is crucial in order to reflect the actual side-effects these operations have on the underlying system.
+
+A naive approach to implement ordering is to use the system clock to timestamp events.
+However, the system clock for a given machine is not guaranteed to be sane over any period due to NTP updates or users manually changing the system time.
+Therefore using the system clock is not a reliable method to order events.
+A more reliable approach is to use the machine's hardware monotonic clock as it provides the guarantee of a consistent increasing time value over any single run of a given machine.
+With the initial version of OPUS we favour this approach, especially since we plan to run a dedicated instance of OPUS on-host.
+
+\subsection{Provenance Storage}
+Once the raw system call events are received by the OPUS backend and transformed into provenance using PVM rules, it must be persisted in a suitable data store.
+As part of the design we consider primarly three types of data stores:
+
+\paragraph{Relational:} 
+Relational databases have been around for decades and are the database of choice for many data-intensive storage and retrieval applications.
+Most relational databases support SQL as the standard language for queries and this makes transitioning between various implementations of relational databases much easier.
+However, given the graph structure of our provenance data, expressing traversal queries for relational data can result in exceedingly complex queries.
+At the time of designing OPUS there was a lack of support for hierarchical queries in SQL therefore relational databases was not first choice for our data store.
+Today, there is support for Common Table Expressions (CTEs) which allow us to effeciently express complex traversal queries in relational databases.
+For the initial implementation of OPUS we need to ensure that the data is easily storable and retrievable for the purposes of tracking scientific data and computation, therefore relational databases may not be the best fit for our needs.
+
+\paragraph{Key-Value:}
+Key-Value databases have gained popularity in recent times mainly because they are schemaless and simple to use. They and desgined for storing, retrieving and managing associative arrays.
+KV stores are avialable for a range of applications from heavy weight distributed systems to single node systems running as an embedded database instance within applications.
+Previous general purpose provenance systems such as PASS have shown that it is possible to use key-value stores ~\cite{BerkleyDB} for the storage and retrieval of provenance.
+During the design and implementation of OPUS we've explored the use of LevelDB an embedded key-value store by modelling nodes and edges in the provenance graph to fit the key-value paradigm.
+We've observed that although key-value stores are simple to integrate with and use, they have several downsides while modelling provenance graph structured data:
+(i) The implementation of features like node and edge types in key-value stores requires partitioning of the key space to encode type information.
+(ii) Indexes on node and edge properties have to be manually implemented as key-value stores inherently do not support indexes.
+(iii) They do not provide support for an expressive query language such as SQL. Instead, graph traversal queries must be implemented manually at the application layer. This results in an increased number of round-trips to the database and back, leading to a reduction in performance.
+
+Given these shortcomings, our conclusion is that key-value stores are not the best fit for the first phase of OPUS.
+
+\paragraph{Graph:} 
+Graph databases can represent our provenance object and relationships more naturally and effectively.
+Most graph databases also allow for powerful querying capabilities either via a query language such as Cypher ~\cite{Cypher}  or a traversal API ~\cite{Gremlin}.
+For the initial design and implementation of OPUS our requirement is to use a lightweight and easily administerable graph database, while also providing the possibility of scaling the database in future if required.
+Given this constraint our decision is to use an embedded Neo4J database to run as part of the OPUS backend (Provenance Analyser) to persist provenance data.
+Neo4J also provides the option to scale out to running a dedicated server instance or to cluster several instances if necessary.
+This augurs well for our future requirements as well.
+
+% -----------------------------------------------------------------------------
+
+%Databases to consider?
+%
+%Target is scientific computing environment. Need a lightweight d/b that requires little or no maintenance.
+%Our focus therefore was to use an embedded DB. Single host, tightly coupled, little ongoing maintenance etc.
+%
+%Relational, Graph, Key-Value?
+%
+%Relational: Been around for a long time. Scalable to large datasets. Most DBs support SQL based querying. 
+%May not be the most efficient way to represent graph structured data.
+%SQL languge support at the time of designing OPUS lacked semantics for graph type queries.
+%Today SQL has support for CTEs with most relational dbs.
+%
+%Graph Databases: Seeing a surge in graph dbs. Most are however designed for distributed storage. Also quite heavy weight and over-engineered.
+%We need something more simpler.
+%Our initial plan is to build this prototype quickly and reevaluate the storage layer in the next phase.
+%
+%KV-store: Simple operations get and put. No schema required. Very simple and lightweight. Plethora of implementations from in-memory, embedded persistent to distributed.
+%All pretty much supporting the same operations.
+%Previous systems such as PASS have also used KV stores to for persistence of provenance. It has been shown to work.
+%For the initial implementation we experimented with a KV-store, LevelDB as it is embedded and has relatively good performance numbers compared to other state of art embedded dbs ~\cite{leveldbBench}. 
+%However, this was not tenable since a query language is not supported. Most of the traversal queries need to be performed manually resulting in a lot of round-trips betwen the analyser and the d/b engine, leading to a lack of performance.
+
+% -----------------------------------------------------------------------------
+
+\section{System Design}
+In this section we describe the system architecture of OPUS and the high level implementation details of each component of the system.
+% TODO: Add the high level system arch figure here.
+
+\begin{figure}[t!]
+  \centering
+    \includegraphics[width=1.0\columnwidth]{BroadProvDesign}
+  \caption{OPUS: High Level Design}
+  \label{fig:opushld}
+\end{figure}
+
+As shown in figure ~\ref{fig:opushld} the system consists of four main components:
+\begin{itemize}
+\item A frontend that captures raw event data from user activities.
+\item A backend that analyses the raw event data and transforms them into a provenance graph.
+\item A storage system that persists provenance objects and their relationships.
+\item A query API that allows users to retrieve the provenance of their data and computations.
+\end{itemize} 
+
+The design of the system is such that multiple frontend instances can run simultaneously and transmit their event stream to the backend for analysis and storage.
+%The initial implementation of the system for use in the context of scientific computing will use libc interposition for the events stream capture.
+%Other producers using a different method for capturing event streams, for example kernel level instrumentation can easily be plugged into the system if necessary.
+The backend for the initial phase will comprise of a single analyser instance running on-host that converts raw event streams into provenance.
+However, the design can be extended to add multiple analyser instances to load balance or handle events from multiple hosts.
+The storage system is also pluggable and the design allows this component to be changed in future releases.
+
+\subsection{System Assumptions}
+The current implementation of OPUS targets the x86 and x86\_64 processor architectures.
+However, the design of OPUS itself is not machine or hardware dependent and can be easily ported to work on other architectures.
+We assume that most applications, specifically scientific applications interact with the OS via libc and that that direct invocation of system calls are absent or rare.
+Finally, we also assume that most scientific applications dynamically link with libc as the intersposition mechanism relies on the runtime linker.
+
+\subsection{Module Level Desgin} % TODO: Module level components, expand on the previous figure.
+%Frontend, library interceptor
+%Backend, connection manager, analyser, storage interface, database (Neo4J).
+
+\begin{figure}[t!]
+  \centering
+    \includegraphics[width=1.0\columnwidth]{ProvDesign}
+  \caption{OPUS: Module level design}
+  \label{fig:opuslld}
+\end{figure}
+
+As shown in ~\ref{fig:opuslld} the primary modules in OPUS consists of a library interposer, connection manager, provenance analyser, storage interface and a graph database.
+We now describe implementation details for each of these modules:
+
+\subsubsection{Library Interposer}
+% Shared library written using C++. 
+% The library is loaded transparently on program startup by setting the LD_PRELOAD environment variable to point to the interposition library path.
+% When this is done, the runtime linker overrides the symbol table with the specific symbols implemented as part of the interposition code.
+% This is shown in figure xxxx. TODO: Add figure showing how interposition works.
+
+% Conceptually implementing interposition involves writing a function with the same symbol as the target libC function, capturing specific arguments being passed to the function, calling the underlying libC function and then capturing the return arguments.
+% However, in practice there are several technical challenges that must be overcome to implement such a practically usable interpostion library.
+% Firstly, it is not sufficient to only interpose \texttt{stem} functions in the libC call chain.
+% Secondly, each function has its own set of argument and return types. Writing interposition code for each of these functions is cumbersome.
+% Finally, interposing certain functions affects the semantics of the function call. Maintaining semantic equivalence with posix is required. How do you ensure this happens?
+
+% The library interposes several I/O and process related libC functions by overriding the symbol table.
+% A total of xx functions are interposed.
+% 
+
+\subsubsection{Connection Manager}
+
+\subsubsection{Provenance Analyser}
+
+\subsubsection{Storage Interface}
+
+\subsubsection{Graph Database}
+
+
+
+%\begin{itemize}
+%\item Considered a number of capture options. We require a fairly fine granularity of capture but in user-space.
+%\item A number of options to evaluate, ptrace, tracing tools (dtrace, system tap etc), kprobes, linux audit etc.
+%\item Our requirement is for the capture to happen entirely in user-space and for the overheads to be as minimal as possible.
+%\item We use Library level interposition mechanism (LD\_PRELOAD) to override the standard C library symbols that the application invokes.
+%\item To ease development effort for interposition, we implemented code generation using templating. We defined a DSL that can be used to generate boilerplate code.
+%\item Introducing this interposition layer could potentially change the semantics of the application being interposed, we therefore must maintain semantic equivalence with Poisix.
+%\item These problems are covered in the TaPP'14 paper. Specifically templating, dealing with vfork etc.
+%\item DSL for code generation image can be added.
+%\item Figure for templating can be added here.
+%\item Architecture diagram as well.
+%\item A backend receives syscall or library call information and converts it into provenance based on PVM (see next section) that builds relationships between input and output, application context and program executions.
+%\item Initial use of levelDB. Change to use Neo4J to enable easier graph traversal.
+%\end{itemize}
+
+
+% TODO: from here..
 \section{Reasoning About Provenance}
 Provenance systems are designed to store the history or lineage of digital entities such as files, sockets, pipes, processes etc.
 Entities are typically modelled as objects and versioned in response to modifications by operations that change their state.
@@ -313,47 +537,107 @@ In essence PVM enables us to:
 (i) formalise the concept of tracking and recording changes in system entities (i.e. versioning) and
 (ii) formalise the versioning side-effects of concurrent updates to system entities.
 
-% TODO: Expand from here
-%Basic unit of modelling is an \texttt{object}.
-%
-%What is it?
-%A snapshot of an entity's state in a timeline.
-%
-%What do they represent in a real system?
-%Objects are modified by \texttt{processes}.
-%
-%To distinguish between the global view of the system and the local view as seen by a program we introduce the concept of global and local objects.
-%
-%PVM essentially formalises the relationship between local and global objects.
-%Introduce the concept of binding and unbinding.
+\subsubsection{PVM Definitions}
+In this section we will discuss some of the terminologies and operations used in PVM.
 
-% Example with a simple file open and close.
-% Example with a concurrent access case, open, unlink, close.
+\paragraph{Object}
+In PVM the basic unit of modelling is an \texttt{object}.
+Objects are abstractions that group associated data and metadata in a logically addressable unit.
+Objects typically represent system entities such as files, sockets, pipes etc.
+Objects are uniquely addressable and accessible using an identifier, for example file path, IP address and port tuple etc.
+
+\paragraph{Processes} are abstractions for entities that access or modify objects as a side-effect of execution.
+These side-effects are operations that \texttt{processes} perform to \texttt{mutate} data or meta-data of an underlying entity (e.g. a file in unix) represented by its \texttt{object} in PVM.
+An example of a \texttt{process} entity in PVM is a thread of execution in a UNIX like system.
+It is also assumed that operations carried out by a process can affect the behaviour of other processes concurrently interacting with the same entity in the system and PVM allows us to model this interaction to reflect the underlying semantics of the system.
+For example, in a POSIX based system a process unlinking a file being used by other processes orphans the file in other processes, this behaviour can be easily modelled in PVM.
+
+\paragraph{Global Objects} are system scope, uniquely identifiable logical representations of entities (e.g. files or sockets) in the system.
+PVM assigns a global object to every entity in the modelled system and versions them in response to system events.
+
+\todo{Introduce the concept of aliasing and equivalence}
+
+\paragraph{Local objects}
+In most real-world systems an executing process or thread can only perceive global objects representing entities such as files or sockets in the system via references to them.
+For example, in UNIX like systems these references are typically file descriptor handles to resources such as files, network sockets, pipes etc.
+These references are modelled in PVM as local objects and versioned corresponding to version changes in global objects.
+
+\subsubsection{Relationship between local and global objects}
+PVM formalises the relationship between local and global objects as follows:
+Local Objects are used to track, and record process interaction with global objects.
+To do this, local objects are associated with global objects and operations are carried out on the local object to manipulate its associated global object.
+Access to a global object is terminated by disassociating it from its local objects.
+
+In effect, the local object acts as a process scope unique identifier to the physical entity the corresponding global object represents.
+This identifier (and the associated global object it is associated with) is considered valid regardless of the actual state of the entity in the system.
+For example, on a POSIX system a local object associated with a file continues to validly refer to the file until disassociation even if the file is deleted by another process.
+Enforcing this constraint simplifies the model and enables us to reason about concurrent accesses to entities in the system.
+
+Associating a local with a global object is defined as \texttt{binding} the local object to the global object, while disassociation is referred to as \texttt{unbinding}.
+
+\subsubsection{PVM Operations}
+PVM defines several operations to express its versioning calculus. All actions of the underlying system are mapped using these operations.
+
+\paragraph{Naming Conventions:}
+The following naming conventions are used to aid succintness.
+
+$$l - Local Object$$
+$$g - Global Object$$
+
+\paragraph{Local Object Management:}
+Local objects are acquired using the operation $get(l)$ and released using $drop(l)$.
+
+\paragraph{Binding and Unbinding:}
+PVM defines functions to \texttt{bind} a local object to a given global object or to \texttt{unbind} a local object from a global object.
+$$bind(l, g)$$
+$$unbind(l, g)$$
+
+\paragraph{Global Object Management:}
+The following functions are defined to acquire or release a given local and global object pair and all global objects in a global object equivalence set.
+
+$$get(l, g):\forall r.r \in g.get(r).bind(l,r)$$
+$$drop(l, g):\forall r.r \in g.unbind(l, r).drop(r)$$
 
 
+\subsubsection{Modelling POSIX File I/O}
+Our primary goal is to design OPUS to capture file and process provenance in the context of scientific computing.
+To build such a proof-of-concept system, in this section we model the POSIX system interface standard using PVM operations.
 
-%\begin{itemize}
-%\item What is a provenance object? History or lineage of digital entities (files, sockets, pipes etc.). Entities modelled as objects and versioned.
-%\item What is a provenance object version? Version of an object represents the state of an entity at a give time in its history. Versions are chained together to allow us to reason about the history of an entity in its lifetime.
-%\item What versioning schemes exist? Version on write, Open-to-Close versioning.
-%\item What is PVM? Definable versioning semantics.
-%\item How does PVM simplify our ability to reason about provenance?
-%Formalises the concept of tracking and recording changes in system entities.
-%Formalises the versioning side-effects of concurrent updates to system entities.
-%\end{itemize}
+In the previous section~\ref{subsubsec:pvmop} we introduced the core notations and opertions defined in PVM, however, for succintness purposes we introduce one additional notational convention.
+$\phi$ - Denotes an ephemeral local object. This is used to highlight cases where a local object is required to be acquired purely for mapping the underlying POSIX operation into PVM.
+This notation is provided for convenience of reading and is not a special case.
 
-\section{Implementation}
+\paragraph{Versioning Rules:}
+PVM provides the flexibility to define custom versioning rules that can accurately capture the semantics of the underlying system being modelled.
+We define the following rules for versioning in the POSIX 1003 mapping:
+
 \begin{itemize}
-\item Considered a number of capture options. We require a fairly fine granularity of capture but in user-space.
-\item A number of options to evaluate, ptrace, tracing tools (dtrace, system tap etc), kprobes, linux audit etc.
-\item Our requirement is for the capture to happen entirely in user-space and for the overheads to be as minimal as possible.
-\item We use Library level interposition mechanism (LD\_PRELOAD) to override the standard C library symbols that the application invokes.
-\item To ease development effort for interposition, we implemented code generation using templating. We defined a DSL that can be used to generate boilerplate code.
-\item Introducing this interposition layer could potentially change the semantics of the application being interposed, we therefore must maintain semantic equivalence with Poisix.
-\item These problems are covered in the TaPP'14 paper.
-\item A backend receives syscall or library call information and converts it into provenance based on PVM (see next section) that builds relationships between input and output, application context and program executions.
-\item Initial use of levelDB. Change to use Neo4J to enable easier graph traversal.
+\item Global objects are versioned each time they are acquired or dropped.
+\item Local objects are versioned every time their attached global object versions.
 \end{itemize}
+
+\paragraph{Operation Mapping:} \todo{Expand these points}
+Identified set of system calls and map them onto PVM semantics.
+Type I, system calls that causes nodes in the graph to version.
+Type II, system calls that act directly on paths and not via file handles. In PVM we model these using the ephemeral local object $\phi$.
+Write down the PVM semantics here. \todo{from the wiki document}
+
+Type III, special case system calls that have to be defined individually.
+
+Discuss about how we have modelled process related calls in PVM. e.g. fork, exec, vfork etc.
+
+File write.
+    What is the mapping for open, write and close.
+    Draw a figure step to open a file, write to it and close it.
+
+Concurrent file access.
+    Mapping for unlink.
+    Draw another figure with concurrent access to the file.
+    Process has file opened, another process unlinks it.
+
+More mappings are defined in the appendix.
+\todo{Expand these points further and also the calculus}
+
 
 \section{Evaluation}
 \begin{itemize}
@@ -363,23 +647,52 @@ In essence PVM enables us to:
 \item Performance evaluation of the analyser backend. Cost of DB operations.
 \item Spatial overheads: Average space used to store provenance, for scientific workloads.
 \item Comparing Neo4J with SQLite?
+\item https://docs.google.com/spreadsheets/d/13QqrShPEgjC91RKLnzcIfuliM-mZovhjO2vRkewWyJ0/edit?usp=sharing
+\item Look at how CDE was evaluated. SPEC, Real-World benchmarks.
 \end{itemize}
 
-\section{Provenance tools for Scientists}
+\section{Provenance tools}
 \begin{itemize}
 \item Debug system change. Detect changes in environment, command line params, library versions linked etc.
+\item Show the command and output snapshot.
 \item Workflow Tracking. Capture scientific workflow from ad-hoc steps. Tools to visualise and scriptise the workflow.
+\item Show the provenance graph figure here.
 \item Archiving. EPSRC mandate to provide code and data used to produce results. Workflow archive tool, enables scientists to archive and upload their code and data used in experiments.
 % NOTE: Maybe merge workflow tracking and archiving into one tool?
 \end{itemize}
 
+\section{Beyond Scientific Computing}
+\begin{itemize}
+\item OPUS as a provenance system can be used beyond the use-case of scientific computing.
+\item The OPUS backend can consume data from any system call level tracing producer.
+\item We have infact ported OPUS to work with data generated from DTrace instrumentation on FreeBSD.
+\item This is in the context of the CADETS project. Explain CADETS briefly here.
+\item OPUS will be one of the consumers of CADETS trace data and will generate provenance graph.
+\item OPUS will run on the network and store data for higher level analysis.
+\item In the context of CADETS what assurances can a system like OPUS provide about the data it stores to disk.
+\item Can an attacker compromise the machine on which OPUS is running on and modify or corrupt the data?
+\end{itemize}
 
-\chapter{NORAD: Non-Repudiable Assertions for Disk I/O}
+
+
+\chapter{Non-Repudiable, Assertable Disk I/O} % NORAD
 \section{Motivation}
 \begin{itemize}
-\item Previous chapter looked at adding control-flow provenance but we don't actually do data-flow provenance, we assume existing mechanisms are leveraged to support data provenance.
-\item However, the achilles heel in such a system is reasoning about the trustworthiness and correctness of data.
-\item Correctness has previously been solved using crypto techniques, hashing, checksumming, encryption etc.
+\item Previous chapter looked at adding provenance support for scientific data and computational pipelines. 
+\item But such provenance capture is not limited to scientific computing alone. The use of provenance in systems security is gaining more and more importance.
+\item The goal of the CADETS project is to leverage provenance to detect or prevent security compromises, typically involving data infiltration and exfiltration in systems.
+\item CADETS is looking at OPUS as a potential tool that can generate provenance from raw events generated on such systems.
+\item When used in such a security context, OPUS needs to provide certain guarantees about the authenticity and integrity of provenance it is generating and storing on disk.
+\item Currently, OPUS has a large TCB. A significant part of this TCB is the underlying OS.
+\item If the OS gets compromised can one still reason about the trustworthiness of provenance that OPUS generates?
+
+\item There is now commerically available hardware support for isolated execution, see SGX section.
+\item Executing OPUS on SGX will ensure that critical bits in OPUS memory are protected and the provenance graph generated by OPUS is trustworthy.
+\item However, to store this provenance OPUS still needs to call into the underlying OS.
+\item  % TODO: from here....
+
+\item However, the achilles heel in such a system is reasoning about the trustworthiness and integrity of data.
+\item Integrity has previously been solved using crypto techniques, hashing, checksumming, encryption etc.
 \item Onus on the application to use these techniques. However, this still not sufficient.
 \item Applications must trust the underlying OS to faithfully perform their I/O.
 \item OSes get routinely compromised and this questions the trustworthiness of data and its provenance.
@@ -392,6 +705,8 @@ In essence PVM enables us to:
 \item Talk about InkTag, Sego etc.
 \item SGX, hardware assisted inverse sandbox for the secure execution of applications on untrusted system software.
 \end{itemize}
+
+% TODO: What is SGX, how does it work?
 
 \section{NORAD}
 \begin{itemize}
