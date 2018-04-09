@@ -184,7 +184,7 @@ of systems.
 \section{Contributions}
 The contributions of this thesis are thus:
 \begin{itemize}
-\item Design and implementation of a provenance system called OPUS, for scientists.
+\item Design and implementation of a provenance system called OPUS, for scientific workloads.
 \item Tools and applications that utilise this system to show its utility in the context of scientific computation.
 \item A performance characterisation of the system compared to existing systems.
 \item A prototype system, NORAD for asserting the data provenance captured by provenance systems.
@@ -206,7 +206,7 @@ This chapter presents the background literature in the area of provenance.
 \item Cite the Primer on Provenance paper.
 \end{itemize}
 
-\chapter{OPUS: Provenance Support for Scientists}
+\chapter{OPUS: Provenance Support for Scientific Workloads}
 The work described in this chapter is a joint contribution with Thomas Bytheway. My primary contribution in this body of work is as follows:
 
 \begin{itemize}
@@ -294,7 +294,7 @@ The core idea with these mechanisms is to provide support in the kernel to trace
 The key benefits of kernel-level tracing mechanisms are that it is completely seamleass to applications, executes at a higher privilege level and therefore potentially secure from user-space attacks.
 A user will require \texttt{root} permissions to enable or configure these tracing mechanisms.
 However, the main limitation of using such an approach for provenance capture is that most of these mechanisms have been introduced fairly recently and they may not be supported in older kernel versions.
-Given that our requirement is to support scientists our initial decision is to not use such techniques for provenance capture.
+Given that our requirement is to support scientific workloads our initial decision is to not use such techniques for provenance capture.
 
 
 \paragraph{Binary Rewriting} is the process of transforming an application binary by modifying individual instructions to implement a specific functionality while still retaining the semantics of the original application. 
@@ -394,7 +394,6 @@ This augurs well for our future requirements as well.
 
 \section{System Design}
 In this section we describe the system architecture of OPUS and the high level implementation details of each component of the system.
-% TODO: Add the high level system arch figure here.
 
 \begin{figure}[t!]
   \centering
@@ -424,9 +423,7 @@ However, the design of OPUS itself is not machine or hardware dependent and can 
 We assume that most applications, specifically scientific applications interact with the OS via libc and that that direct invocation of system calls are absent or rare.
 Finally, we also assume that most scientific applications dynamically link with libc as the intersposition mechanism relies on the runtime linker.
 
-\subsection{Module Level Desgin} % TODO: Module level components, expand on the previous figure.
-%Frontend, library interceptor
-%Backend, connection manager, analyser, storage interface, database (Neo4J).
+\subsection{Module Level Desgin}
 
 \begin{figure}[t!]
   \centering
@@ -435,50 +432,60 @@ Finally, we also assume that most scientific applications dynamically link with 
   \label{fig:opuslld}
 \end{figure}
 
-As shown in ~\ref{fig:opuslld} the primary modules in OPUS consists of a library interposer, connection manager, provenance analyser, storage interface and a graph database.
+As shown in ~\ref{fig:opuslld} the primary modules in OPUS consists of a interposition module, connection manager, provenance analyser, storage interface and a graph database.
 We now describe implementation details for each of these modules:
 
-\subsubsection{Library Interposer}
-% Shared library written using C++. 
-% The library is loaded transparently on program startup by setting the LD_PRELOAD environment variable to point to the interposition library path.
-% When this is done, the runtime linker overrides the symbol table with the specific symbols implemented as part of the interposition code.
-% This is shown in figure xxxx. TODO: Add figure showing how interposition works.
+\subsubsection{Interposition Module}
+The interposition module is a shared library implemented in C++.
+This library is loaded transparently on program startup by setting the LD\_PRELOAD environment variable to point to the interposition library path.
+Once this is done, when the program binary is loaded into memory, the runtime linker overrides the symbol table with the symbols defined as part of the interposition library.
+When the program invokes a function call with an overridden symbol, the call first transfers to the interposition function which then calls the actual implementation. 
+This is shown in \ref{fig:iposeexample} where a program calls an overridden symbol for the \texttt{open} libC function, resulting in the interposed function for \texttt{open} being executed first before calling the underlying libC implementation of \texttt{open}.
+OPUS uses the interposition function to capture raw provenance information such as arguments passed to the function, its return value and program context.
+The program context uniquely identifies the program/thread instance along with a monotonic timestamp to indicate the start and end of the event etc.
+This raw provenance data is then packaged using Google's protocol buffers and sent to the backend for further processing.
 
-% Conceptually implementing interposition involves writing a function with the same symbol as the target libC function, capturing specific arguments being passed to the function, calling the underlying libC function and then capturing the return arguments.
-% However, in practice there are several technical challenges that must be overcome to implement such a practically usable interpostion library.
-% Firstly, it is not sufficient to only interpose \texttt{stem} functions in the libC call chain.
-% Secondly, each function has its own set of argument and return types. Writing interposition code for each of these functions is cumbersome.
-% Finally, interposing certain functions affects the semantics of the function call. Maintaining semantic equivalence with posix is required. How do you ensure this happens?
+Conceptually, implementing an interposition library is relatively straightforward.
+It involves defining relevant functions with the same symbols as the target library functions, capturing the required arguments, calling the original function implementation and storing the return value.
+However, in practice there are several technical challenges that arise while implementing a practically usable interposition library for capturing provenance:
 
-% The library interposes several I/O and process related libC functions by overriding the symbol table.
-% A total of xx functions are interposed.
-% 
+\begin{enumerate}
+\item \texttt{Growing Interposition Requirements:} Unlike system call interception, library call interposition requires implementing wrapper functions for all visible symbols. To understand this consider the \texttt{read} system call in the libC API. Figure ~\ref{fig:callchain} shows a sub-graph containing various paths through which the \texttt{read} function can be reached from withing the libC call graph. 
+Here, merely interposing the final \texttt{read} function (also called stem function) does not result in interposing all other variants of the function since the \texttt{read} symbol is declared PROTECTED. The PROTECTED attribute ensures that internal calls in libC are computed at compile time instead of resolving at run-time.
+This results in an explosion in interposition requirements since the a typical libC library implementation has over 1500 symbols that can be overridden. 
+
+Manually implementing interposition for for these functions is cumbersome, not only due to the number of functions but also due to the different set of arguments and return values for each of these functions. The OPUS frontend deals with this problem by using code generating based on templating for most of the interposed functions. The details of how this is implemented is desribed in our paper ~\cite{OPUSLessons}.
+
+\item \texttt{Maintaining Semantic Equivalence with Posix:} Another major issue with interposition is that when certain functions are interposed they can cause a change to application semantics. For OPUS, this is observed in the case of two functions, \texttt{vfork} and \texttt{signal}. Interposing these functions breaks the semantics expected by the application for different reasons. Both these cases are discussed in detail in our paper ~\cite{OPUSLessons} and how OPUS addresses these problems.
+
+\end{enumerate}
 
 \subsubsection{Connection Manager}
+The OPUS backend implements a connection manager module that receives raw provenance data from applications being interposed.
+The connection manager can receive this data via TCP or via UDS sockets and therefore is flexible to run on the same machine or on a remote machine.
+The connection manager accepts data streams as protocol buffer messages from each frontend instance and adds these message to an internal priority queue that it shares with the Provenance analyser module.
+A priority queue is used to ensure that the messages are sorted by their timestamp before being processed.
 
 \subsubsection{Provenance Analyser}
+The provenance analyser is the heart of the OPUS backend.
+The analyser tranforms raw libC or system call events captured in the OPUS frontend into meaningful provenance graphs.
+The analyser maintains a mapping of raw events to its corresponding action on the provenance graph based on PVM semantics.
+The semantics of PVM is discussed in detail in section ~\ref{sec:pvm}.
+
+Once the PVM definition for a given action is obtained, the provenance analyser can take decisions involving versioning provenance objects, linking provenance objects based on the type of operation performed and updating relevant I/O information in the provenance system.
+This is illustrated with an example given below.
+
+These actions typically involve decision regarding versioning of provenance objects, linking provenance objects based on type of operation performed and updating relevant event information in the graph.
+As the graph is constructed, it is persisted via the storage interface described next.
 
 \subsubsection{Storage Interface}
+The storage interface provides an abstract interface for the analyser to store or retrieve provenance objects.
+This abstraction allows the OPUS backend to use a wide variety of data stores for storing provenance.
+For the initial implementation of OPUS, levelDB, a key-value store was considered as the storage backend, however, due to the lack of querying capabilities offered by key-value stores the current implementation uses the Neo4J graph database.
 
-\subsubsection{Graph Database}
-
-
-
-%\begin{itemize}
-%\item Considered a number of capture options. We require a fairly fine granularity of capture but in user-space.
-%\item A number of options to evaluate, ptrace, tracing tools (dtrace, system tap etc), kprobes, linux audit etc.
-%\item Our requirement is for the capture to happen entirely in user-space and for the overheads to be as minimal as possible.
-%\item We use Library level interposition mechanism (LD\_PRELOAD) to override the standard C library symbols that the application invokes.
-%\item To ease development effort for interposition, we implemented code generation using templating. We defined a DSL that can be used to generate boilerplate code.
-%\item Introducing this interposition layer could potentially change the semantics of the application being interposed, we therefore must maintain semantic equivalence with Poisix.
-%\item These problems are covered in the TaPP'14 paper. Specifically templating, dealing with vfork etc.
-%\item DSL for code generation image can be added.
-%\item Figure for templating can be added here.
-%\item Architecture diagram as well.
-%\item A backend receives syscall or library call information and converts it into provenance based on PVM (see next section) that builds relationships between input and output, application context and program executions.
-%\item Initial use of levelDB. Change to use Neo4J to enable easier graph traversal.
-%\end{itemize}
-
+\subsubsection{Query API}
+The query API provides a wide variety of functions to retrieve provenance data from the underlying data store.
+The query API is implemented as a module that can be imported by any query tool.
 
 % TODO: from here..
 \section{Reasoning About Provenance}
@@ -617,29 +624,117 @@ We define the following rules for versioning in the POSIX 1003 mapping:
 \end{itemize}
 
 \paragraph{Operation Mapping:} \todo{Expand these points}
-Identified set of system calls and map them onto PVM semantics.
-Type I, system calls that causes nodes in the graph to version.
-Type II, system calls that act directly on paths and not via file handles. In PVM we model these using the ephemeral local object $\phi$.
-Write down the PVM semantics here. \todo{from the wiki document}
+
+\begin{figure}[t!]
+  \centering
+    \includegraphics[width=1.0\columnwidth]{SysCalls}
+  \caption{System call types}
+  \label{fig:syscalltypes}
+\end{figure}
+
+We have identified a set of system calls that have to be mapped to PVM semantics.
+These system calls belong to three types, as shown in ~\ref{fig:syscalltypes}
+
+Type I, system calls that no not cause nodes in the graph to version.
+
+Type II, system calls that act directly on paths and not via file handles.
+PVM models type II system calls using the ephemeral local object $\phi$ as follows:
+
+$$get(\phi)$$
+$$get(\phi, eqv(g))$$
+$$drop(\phi, eqv(g))$$
+$$drop(\phi)$$
 
 Type III, special case system calls that have to be defined individually.
+Some type III system call mappis are shown below:
 
-Discuss about how we have modelled process related calls in PVM. e.g. fork, exec, vfork etc.
+\texttt{Open} take a file path and returns a file descriptor.
+This operation is mapped in OPUS as,
 
-File write.
-    What is the mapping for open, write and close.
-    Draw a figure step to open a file, write to it and close it.
+$$l = open(g):$$
+$$get(l)$$
+$$get(l, eqv(g))$$
 
-Concurrent file access.
-    Mapping for unlink.
-    Draw another figure with concurrent access to the file.
-    Process has file opened, another process unlinks it.
+\texttt{Close} takes a file descriptor as argument and releases the underlying resource.
+This operation is mapped in OPUS as,
 
-More mappings are defined in the appendix.
-\todo{Expand these points further and also the calculus}
+$$close(l):$$
+$$drop(l, globals(l))$$
+$$drop(l)$$
+
+\texttt{Unlink} takes a file path as argument and deletes the file from the filesystem.
+This is is mapped in OPUS as,
+
+$$unlink(g):$$
+$$get(\phi)$$
+$$get(\phi,eqv(g))$$
+$$\forall r.r \in locals(g).r \neq \phi.untie(r,g)$$
+$$drop(\phi,eqv(g))$$
+$$erem(eqv(g),g)$$
+$$drop(\phi)$$
+
+% TODO: Is performance evaluation sufficient?
+% What about graph generation, storage etc?
+
+\section{Performance Evaluation}
+In this section we evaluate the overheads imposed by OPUS on scientific activities and workloads.
+We limit our scope by focussing on the most common types of activities that a scientific user typically performs, namely, 
+package installation, file editing, use of version control, code compilation, file archival/extraction and execution of scientific workloads.
+Since the scientific applications can themselves be diverse, we further categorise them into compute bound, I/O bound and applications that require a runtime environment (e.g. python).
+We choose representative workloads for each of these categories.
+
+We are intersted in evaluating two aspects of our system:
+\begin{enumerate}
+\item Temporal overheads introduced by the provenance capture and analysis components on end user applications.
+\item Spatial overheads (memory and disk space) of processing and storing provenance data.
+\end{enumerate}
+
+To evaluate the temporal overheads we first setup a baseline for each type of activity by running the representative application for that type with OPUS disabled.
+We then enable OPUS and run the same set of applications in the OPUS enabled environment.
+
+OPUS has a number of configuration options for both the frontend and backend.
+The frontend can be configured to run in two modes:
+\begin{enumerate}
+\item Full capture, where all events for which interposition is available are captured.
+\item Lite capture, where certain events (e.g. reads and writes) are discarded.
+\end{enumerate}
+
+Similarly, the backend analyser can be configured to run in,
+\begin{enumerate}
+\item Logging mode, where the analyser does minimum processing on the system call data and logs it to disk.
+\item PVM mode, where PVM operations are applied on each event received and a DAG is constructed.
+\end{enumerate}
+
+We evaluate OPUS with various configuration options for both the frontend and backend.
+Each experiment is repeated ten times to account for variances in runtime due to system effects that we do not control.
+
+% 
+% We measure the overheads under various configurations for both the OPUS frontend and backend.
+% i.e. full-fat and lite modes, backend in logging mode and PVM mode.
+% Use of embedded vs standalone database.
+
+% Application list:
+% Code Compilation: Kernel Compile. Compilation of CBLAS, LAPACK, FFTW, LAPACK++.
+% Package Installation: Use of apt-get and pip to install packages.
+% Version Control: Git.
+% File I/O: Postmark
+% Archiving/Extracting: tar and untar
+% Application Execution: BioPerl and BioPython, BLAST
+
+% Discussion on what is the cause of the overheads on each of these workloads.
+% Too many file matadata updates?
+% Too many process and thread creations?
+% Low overheads coz its CPU intensive? What meaningful provenance is recorded?
+% Effect of analysis running on the same machine?
+% Categorize syscalls. Which get called a lot, for what type of workload.
+% Time breakdown by syscall.
+
+% NOTES: How was PASS, CDE, Burrito evaluated?
+% PASS and PA-NFS: linux compile, Postmark, Mercurial, BLAST
+% CDE:
+% BURRITO: 
 
 
-\section{Evaluation}
 \begin{itemize}
 \item Temporal overheads of using OPUS. (Interposition overheads)
 \item Pathological case, \texttt{man} command. Single char reads and writes. (should this be in implementation?)
@@ -651,21 +746,24 @@ More mappings are defined in the appendix.
 \item Look at how CDE was evaluated. SPEC, Real-World benchmarks.
 \end{itemize}
 
-\section{Provenance tools}
+\section{Tools for Scientific Workloads}
 \begin{itemize}
-\item Debug system change. Detect changes in environment, command line params, library versions linked etc.
+\item Debugging context changes. Detect changes in environment, command line params, library versions linked etc.
 \item Show the command and output snapshot.
-\item Workflow Tracking. Capture scientific workflow from ad-hoc steps. Tools to visualise and scriptise the workflow.
+\item Tracking Computations. Capture scientific workflow from ad-hoc steps. Tools to visualise and scriptise the workflow.
 \item Show the provenance graph figure here.
-\item Archiving. EPSRC mandate to provide code and data used to produce results. Workflow archive tool, enables scientists to archive and upload their code and data used in experiments.
+\item Archiving for compliance. EPSRC mandate to provide code and data used to produce results. Workflow archive tool, enables scientists to archive and upload their code and data used in experiments.
+\item Post-hoc workflow construction
 % NOTE: Maybe merge workflow tracking and archiving into one tool?
 \end{itemize}
+
+% TODO: Secure provenance?
 
 \section{Beyond Scientific Computing}
 \begin{itemize}
 \item OPUS as a provenance system can be used beyond the use-case of scientific computing.
 \item The OPUS backend can consume data from any system call level tracing producer.
-\item We have infact ported OPUS to work with data generated from DTrace instrumentation on FreeBSD.
+\item We have ported OPUS to work with data generated from DTrace instrumentation on FreeBSD.
 \item This is in the context of the CADETS project. Explain CADETS briefly here.
 \item OPUS will be one of the consumers of CADETS trace data and will generate provenance graph.
 \item OPUS will run on the network and store data for higher level analysis.
@@ -674,14 +772,13 @@ More mappings are defined in the appendix.
 \end{itemize}
 
 
-
 \chapter{Non-Repudiable, Assertable Disk I/O} % NORAD
 \section{Motivation}
 \begin{itemize}
 \item Previous chapter looked at adding provenance support for scientific data and computational pipelines. 
-\item But such provenance capture is not limited to scientific computing alone. The use of provenance in systems security is gaining more and more importance.
-\item The goal of the CADETS project is to leverage provenance to detect or prevent security compromises, typically involving data infiltration and exfiltration in systems.
-\item CADETS is looking at OPUS as a potential tool that can generate provenance from raw events generated on such systems.
+\item However, provenance capture is not limited to the use in scientific computing alone. The use of provenance in systems security is gaining more and more importance.
+\item The goal of the CADETS project is to enable provenance support for the detection and if possible prevention of security attacks in systems.
+\item The CADETS project is looking at OPUS as a potential system that generates provenance from raw event traces generated on such systems.
 \item When used in such a security context, OPUS needs to provide certain guarantees about the authenticity and integrity of provenance it is generating and storing on disk.
 \item Currently, OPUS has a large TCB. A significant part of this TCB is the underlying OS.
 \item If the OS gets compromised can one still reason about the trustworthiness of provenance that OPUS generates?
