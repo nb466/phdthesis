@@ -28,6 +28,7 @@
 % Citations using numbers
 \usepackage[numbers]{natbib}
 \usepackage{todonotes}
+\usepackage{enumerate}
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% Thesis meta-information
@@ -259,7 +260,7 @@ The ultimate goal of capturing provenance is to use it to reason about applicati
 \end{itemize}
 
 \section{Design Decisions} \todo{Write the section on design and implementation of OPUS here}
-The design of OPUS is guided by the constraints outlined in ~\ref{sec:constspace}.
+The design of OPUS is guided by the requirements outlined in ~\ref{sec:constspace}.
 The initial design is intended for on-host provenance capture, analysis and query.
 In this section we discuss our approach and some of the decisions involved in designing OPUS.
 
@@ -366,32 +367,6 @@ Given this constraint our decision is to use an embedded Neo4J database to run a
 Neo4J also provides the option to scale out to running a dedicated server instance or to cluster several instances if necessary.
 This augurs well for our future requirements as well.
 
-% -----------------------------------------------------------------------------
-
-%Databases to consider?
-%
-%Target is scientific computing environment. Need a lightweight d/b that requires little or no maintenance.
-%Our focus therefore was to use an embedded DB. Single host, tightly coupled, little ongoing maintenance etc.
-%
-%Relational, Graph, Key-Value?
-%
-%Relational: Been around for a long time. Scalable to large datasets. Most DBs support SQL based querying. 
-%May not be the most efficient way to represent graph structured data.
-%SQL languge support at the time of designing OPUS lacked semantics for graph type queries.
-%Today SQL has support for CTEs with most relational dbs.
-%
-%Graph Databases: Seeing a surge in graph dbs. Most are however designed for distributed storage. Also quite heavy weight and over-engineered.
-%We need something more simpler.
-%Our initial plan is to build this prototype quickly and reevaluate the storage layer in the next phase.
-%
-%KV-store: Simple operations get and put. No schema required. Very simple and lightweight. Plethora of implementations from in-memory, embedded persistent to distributed.
-%All pretty much supporting the same operations.
-%Previous systems such as PASS have also used KV stores to for persistence of provenance. It has been shown to work.
-%For the initial implementation we experimented with a KV-store, LevelDB as it is embedded and has relatively good performance numbers compared to other state of art embedded dbs ~\cite{leveldbBench}. 
-%However, this was not tenable since a query language is not supported. Most of the traversal queries need to be performed manually resulting in a lot of round-trips betwen the analyser and the d/b engine, leading to a lack of performance.
-
-% -----------------------------------------------------------------------------
-
 \section{System Design}
 In this section we describe the system architecture of OPUS and the high level implementation details of each component of the system.
 
@@ -413,7 +388,7 @@ As shown in figure ~\ref{fig:opushld} the system consists of four main component
 The design of the system is such that multiple frontend instances can run simultaneously and transmit their event stream to the backend for analysis and storage.
 %The initial implementation of the system for use in the context of scientific computing will use libc interposition for the events stream capture.
 %Other producers using a different method for capturing event streams, for example kernel level instrumentation can easily be plugged into the system if necessary.
-The backend for the initial phase will comprise of a single analyser instance running on-host that converts raw event streams into provenance.
+The backend for the initial phase comprises of a single analyser instance running on-host converting raw event streams into provenance.
 However, the design can be extended to add multiple analyser instances to load balance or handle events from multiple hosts.
 The storage system is also pluggable and the design allows this component to be changed in future releases.
 
@@ -646,7 +621,7 @@ $$drop(\phi, eqv(g))$$
 $$drop(\phi)$$
 
 Type III, special case system calls that have to be defined individually.
-Some type III system call mappis are shown below:
+Some type III system call mappings are shown below:
 
 \texttt{Open} take a file path and returns a file descriptor.
 This operation is mapped in OPUS as,
@@ -668,29 +643,48 @@ This is is mapped in OPUS as,
 $$unlink(g):$$
 $$get(\phi)$$
 $$get(\phi,eqv(g))$$
-$$\forall r.r \in locals(g).r \neq \phi.untie(r,g)$$
+$$\forall r.r \in locals(g).r\neq\phi.untie(r,g)$$
 $$drop(\phi,eqv(g))$$
 $$erem(eqv(g),g)$$
 $$drop(\phi)$$
 
-% TODO: Is performance evaluation sufficient?
-% What about graph generation, storage etc?
+\texttt{Link} takes two file names as arguments and links the file path in the second argument as an alias of the file path in the first argument.
+The PVM to Posix mapping for this system call is as follows,
+
+$$link(a,b):$$
+$$get(\phi)$$
+$$get(\phi,eqv(a))$$
+$$get(\phi,b)$$
+$$eadd(eqv(a),b)$$
+$$\forall r.a \in globals(r).r\neq\phi.tie(r,b)$$
+$$drop(\phi,eqv(a))$$
+$$drop(\phi)$$
+
+\texttt{Rename} takes two files as argument, renaming the first file to the second.
+This is a compound operation and can be defined in terms of other system calls as follows,
+
+$$rename(a,b):$$
+$$unlink(b)$$
+$$link(a,b)$$
+$$unlink(a)$$
+
+In addition to the mappings defined above, the analyser also defines similar mappings for a number of other system calls.
+Defining each mapping is beyond the scope of this document.
 
 \section{Performance Evaluation}
-In this section we evaluate the overheads imposed by OPUS on scientific activities and workloads.
-We limit our scope by focussing on the most common types of activities that a scientific user typically performs, namely, 
-package installation, file editing, use of version control, code compilation, file archival/extraction and execution of scientific workloads.
-Since the scientific applications can themselves be diverse, we further categorise them into compute bound, I/O bound and applications that require a runtime environment (e.g. python).
-We choose representative workloads for each of these categories.
+In this section we evaluate the overheads of OPUS on scientific activities and workloads.
+Our scope is limited to the most common types of scientific user activities, namely, 
+package installation, file editing, code compilation, file archival/extraction, workloads requiring a runtime and finally compute intensive applications.
+Representative workloads are chosen for each of these categories.
 
-We are intersted in evaluating two aspects of our system:
+Two aspects of the system are of interest:
 \begin{enumerate}
 \item Temporal overheads introduced by the provenance capture and analysis components on end user applications.
 \item Spatial overheads (memory and disk space) of processing and storing provenance data.
 \end{enumerate}
 
-To evaluate the temporal overheads we first setup a baseline for each type of activity by running the representative application for that type with OPUS disabled.
-We then enable OPUS and run the same set of applications in the OPUS enabled environment.
+To evaluate the temporal overheads we first setup a baseline for each workload with OPUS disabled.
+We then enable OPUS and run the same set of workloads in the OPUS enabled environment.
 
 OPUS has a number of configuration options for both the frontend and backend.
 The frontend can be configured to run in two modes:
@@ -705,10 +699,61 @@ Similarly, the backend analyser can be configured to run in,
 \item PVM mode, where PVM operations are applied on each event received and a DAG is constructed.
 \end{enumerate}
 
-We evaluate OPUS with various configuration options for both the frontend and backend.
+OPUS is evaluated with various combinations of configuration options for both the frontend and backend.
 Each experiment is repeated ten times to account for variances in runtime due to system effects that we do not control.
 
-% 
+\subsection{Benchmarks}
+% TODO: Change the use of we here
+We evaluate the overheads of OPUS using seven applications that are representative of workloads for a scientific user.
+Our evaluation is performed on an Intel i7-6820Hq CPU at 2.70GHz with 32 GB RAM, running Ubuntu 14.04 with a Linux 4.4.0 kernel
+
+\paragraph{Package Installation:} apt-get is a commonly used package installation tool used in Unbuntu platforms and represents an I/O heavy workload.
+We execute apt-get to install and remove the GNU Scientific Library (GSL) and measure the overheads when using OPUS.
+
+\paragraph{File Editing:} Here we measure the overhead a developer experiences when editing a source code file.
+To ensure that these measurements are accurate we use vimscript to automate the process of opening and editing a file.
+This type of workload is both I/O and memory heavy and should be a reasonable test for the overheads imposed by OPUS.
+
+\paragraph{Code Compilation:} Compilation is a very common activity that most scientific users perform.
+To ensure we have a sufficiently complex code base to evaluate, we compile the linux kernl source code.
+This activity produces a significant amount of I/O and process creation events which is captured by OPUS. 
+
+\paragraph{File archival:} We use the tar and gzip programs on linux to evaluate the overheads of achival activity.
+We tar and compress the linux kernel source tree to ensure a significant number of files are archived.
+
+\paragraph{BLAST:} Blast represents a biological workload used to find protein sequences for a given species against a protein sequences database.
+This represents a compute heavy workload.
+% NOTE: ftp://ftp.ncbi.nih.gov/blast/executables/LATEST
+
+\paragraph{Linpack:} is a program that solves a dense NxN system of linear equations Ax=b as it is a common problem in engineering and scientific computing.
+Linpack uses the BLAS (Basic Linear Algebra Library) to perform matrix and vector operations.
+This represents a compute heavy workload.
+% https://github.com/2000nickels/linpackc
+
+\paragraph{Python:} There is an increase in use of languages like python for scientific computing.
+Python is an interpreted language and the runtime can perform several activities that are system or library call intensive.
+Given the provenance capture mechanism OPUS uses, it is useful to understand the impact of the mechanism on such environments.
+We run a sample python program from the BioPython package to measure the overheads imposed.
+
+We run our benchmarks with the various configurations of OPUS frontend and backend.
+The following combinations of configurations have been used:
+\begin{itemize}
+\item Full capture plus logging mode (FCLOG)
+\item Lite capture plus logging mode (LCLOG)
+\item Full capture plus PVM mode (FCPVM)
+\item Lite capture plus PVM mode (LCPVM)
+\end{itemize}
+
+
+
+% Analyser in logging mode, Full capture
+
+% Analyser in logging mode, Lite capture
+
+% Analyser in PVM mode, Full capture
+
+% Analyser in PVM mode, Lite Capture
+
 % We measure the overheads under various configurations for both the OPUS frontend and backend.
 % i.e. full-fat and lite modes, backend in logging mode and PVM mode.
 % Use of embedded vs standalone database.
@@ -767,57 +812,409 @@ Each experiment is repeated ten times to account for variances in runtime due to
 \item This is in the context of the CADETS project. Explain CADETS briefly here.
 \item OPUS will be one of the consumers of CADETS trace data and will generate provenance graph.
 \item OPUS will run on the network and store data for higher level analysis.
-\item In the context of CADETS what assurances can a system like OPUS provide about the data it stores to disk.
-\item Can an attacker compromise the machine on which OPUS is running on and modify or corrupt the data?
 \end{itemize}
 
 
-\chapter{Non-Repudiable, Assertable Disk I/O} % NORAD
+\chapter{NORAD: Non-Repudiable Assertable Data I/O}
+
+In the previous chapter, we assumed provenance is captured in a trusted environment.
+The trusted computing base (TCB) consisted of all software (user-space and kernel) and hardware on which applications executed.
+In this chapter we explore the problem of capturing provenance in untrusted environments and discuss a new primitive, NORAD that enables capture of provenance for an application's I/O activities in a trustworthy and verifiable manner while maintaining a small TCB.
+
 \section{Motivation}
+
+For provenance to be useful it must be trustable.
+In the past, provenance systems have assumed that a large part of the environment where they execute is trusted.
+This ties the trustworthiness of provenance strongly with security of its environment which consists of the entire system software stack (OS and Hypervisor) and hardware (CPU, devices etc.).
+A malicious insider or adversary could exploit vulnerabilities in this large software/hardware stack to either circumvent the provenance capture mechanism, resulting in incomplete provenance or falsify provenance data, destroying its integrity.
+This renders the provenance unreliable and untrustworthy.
+
+Ensuring trustworthiness of provenance is challenging.
+We essentially need to ensure the following properties:
 \begin{itemize}
-\item Previous chapter looked at adding provenance support for scientific data and computational pipelines. 
-\item However, provenance capture is not limited to the use in scientific computing alone. The use of provenance in systems security is gaining more and more importance.
-\item The goal of the CADETS project is to enable provenance support for the detection and if possible prevention of security attacks in systems.
-\item The CADETS project is looking at OPUS as a potential system that generates provenance from raw event traces generated on such systems.
-\item When used in such a security context, OPUS needs to provide certain guarantees about the authenticity and integrity of provenance it is generating and storing on disk.
-\item Currently, OPUS has a large TCB. A significant part of this TCB is the underlying OS.
-\item If the OS gets compromised can one still reason about the trustworthiness of provenance that OPUS generates?
 
-\item There is now commerically available hardware support for isolated execution, see SGX section.
-\item Executing OPUS on SGX will ensure that critical bits in OPUS memory are protected and the provenance graph generated by OPUS is trustworthy.
-\item However, to store this provenance OPUS still needs to call into the underlying OS.
-\item  % TODO: from here....
+\item \texttt{Completeness}: All relevant actions (provenance) pertaining to a unit of data (e.g. file, record, block, packet etc.) or computation (process, thread etc.) are captured.
+There is no way to circumvent the provenance capture mechanism in order to make progress.
 
-\item However, the achilles heel in such a system is reasoning about the trustworthiness and integrity of data.
-\item Integrity has previously been solved using crypto techniques, hashing, checksumming, encryption etc.
-\item Onus on the application to use these techniques. However, this still not sufficient.
-\item Applications must trust the underlying OS to faithfully perform their I/O.
-\item OSes get routinely compromised and this questions the trustworthiness of data and its provenance.
-\item In this chapter we set out to solve the issue of trustworthiness of data for the purposes of asserting and correlating control-flow provenance collected with the data on the system.
-\item Can we do this with the OS out of the trust boundary?
+\item \texttt{Integrity}: The actions that represents the provenance cannot be modified or tampered with, either in flight or at rest. If the provenance is tampered with, one should be able to detect it and take appropriate action.
+
+\item \texttt{Non-repudiation}: If the provenance records describe a set of actions in the past, one cannot deny those actions as not having taken place. Similarly, one cannot claim an action to have taken place if the provenance does not contain that information. That is, there is a strong tie between what the provenance describes as having happened and what actually happened on the underlying system. Completeness and integrity are necessary conditions for non-repudiation.
+
 \end{itemize}
 
-\section{Trusted Execution of applications on Untrusted OSes}
+
+\subsection{Need for trustworthy verifiable provenance}
+Once trustworthy and verifiable provenance is available, it has applications in a number of domains:
+
 \begin{itemize}
-\item Talk about InkTag, Sego etc.
-\item SGX, hardware assisted inverse sandbox for the secure execution of applications on untrusted system software.
+
+\item \textbf{Legal:}
+Use of electronic information such as emails, chats, documents etc. is admissable as evidence in legal proceedings.
+However, one can always question the authenticity of such electronic information making it unusable in court.
+Provenance can be used as proof to assert the authenticity of such electronic information.
+However, unless the provenance is itself captured and stored in a trustworthy manner, it cannot be treated as reliable proof of the authenticity of electronic data.
+
+\item \textbf{Regulatory Compliance:}
+Healthcare Portability and Accountability act (HIPAA) ~\cite{HIPAA} requires logging of data accesses and modifications to medical records.
+Similar efforts are happening in the UK's NHS system ~\cite{deepmind}, where all interaction with patient data are to be logged in a verifiable and trustworthy manner.
+Other sectors such as finance also have such compliance requirements, for e.g. the Sarbanes-Oxley, Gramm-Leach-Bliley and the UK's Data Protection act require proper documentation and audit trails for financial records.
+These audit trails provide a form of provenance in the financial industry.
+Unless these audit trails are trustworthy and verifiable they cannot be used as proof for an activity or transaction.
+
+\item \textbf{Scientific Computing:}
+Scientific computing has for a long time advocated the capture of provenance into its data generation, workflows and processing.
+Over the years several projects ~\cite{PASS, SPADE, OPUS} have integrated provenance capture at the system's level to aid such activity.
+Once provenance is available it enables us to verify the authenticity and quality of a given result.
+However, if the provenance itself can be forged or tampered with then the provenance can be asserted as proof for any desired output. 
+Unless provenance is trustworhty and verifiable, its use as proof in the context of scientific computing becomes meaningless.
+
+\item \textbf{Computer Security:}
+Provenance has applications in computer systems security.
+Provenance essentially captures interactions between computational processes, flow of information between these processes and the context in which all this happens.
+When done at the system level, it allows us to build powerful security tools to investigate or monitor activities such as intrusions and data exfiltration either retroactively or in real-time.
+However, if the provenance capture mechanism can be compromised or the provenance data falsified there is no guarantee that these tools will be effective.
+
 \end{itemize}
 
-% TODO: What is SGX, how does it work?
+\section{The Challenges of Trustworthy Provenance Capture}
+
+In the past trustworthy capture of provenance has often meant ensuring security of provenance data at rest.
+The most notable work on this is SPROV ~\cite{sprov} which uses the concept of provenance chains to ensure integrity and confidentiality of provenance records.
+However, merely providing confidentiality and integrity of provenance records at rest does not guarantee that the provenance is trustworthy.
+We also require the mechanism that does the provenance capture to be complete, tamper-resistant and verifiable.
+
+Patric McDaniel et al. ~\cite{patric} discuss the design principles of such a secure provenance capture mechanism based on the well-known concept of a reference monitor ~\cite{refmon} .
+A reference monitor enforces an access control policy over user operations on the system while ensuring that it is non-bypassable, tamper proof, always invoked and evaluable.
+
+In the traditional application-OS system design the OS plays the role of a reference monitor as all application activities relating to device I/O and process creation/destruction have to be mediated via the OS.
+Whole-system provenance projects such as ~\cite{AdamBates, CamFlow} therefore implement provenance capture in the OS leveraging the linux security modules ~\cite{LSMFramework} framework.
+However, most mainstream OS implementations are complex comprising of hundreds of thousands of lines of code, often implemented using low-level unsafe languages.
+Even a single vulnerability in this code base could be exploited by attackers, potentially leading to a privilege esclation and ultimately a compromise of the provenance capture mechanism.
+Ensuring that such complex systems are bug free or verifying their correctness properties is not trivial.
+
+Recent advances as Intel SGX and ARM Trustzone offer some hope as they provide hardware support for trusted execution.
+Intel SGX is especially of interest since it offers mechanisms to preserve the integrity and confidentiality of code and data without requiring to trust other privileged layers such as the OS, hypervisor, firmware or SMM code.
+Depriviliging parts of the OS to run in such trusted computing environments can allow us to capture provenance in a trustworthy manner.
+
+Our design, discussed in the next section uses this insight and offers a new primitive for capturing provenance in a trustworthy and verifiable manner by leveraging Intel SGX for trusted execution.
+To show a proof-of-concept system, we focus on capturing I/O events in a trustworthy manner as I/O activity information constitutes a major part of data provenance.
+
 
 \section{NORAD}
+
+Most applications have some necessity to perform I/O, for example to read configuration files, write output logs, store database records, access storage across the network etc.
+Capturing these I/O activities in a system allows us to build provenance of data.
+Data provenance solutions in the past ~\cite{PASS, StoryBook} have used mechanisms where I/O activities in a system are interposed and captured to retrospectively build a provenance graph.
+However, most of these solutions implement their capture component in the OS and require trusting the entire OS stack.
+In this section we present a new primitive that allows the trustworthy capture of I/O in a system without having to trust the underlying OS and higher privileged software.
+%We first describe a general design that is applicable for both disk and network I/O, along with an informal proof of correctness followed by an implementation and evaluation for disk I/O.
+
+\subsection{Software Guard Extensions (SGX) Overview}
+Our design for trustworthy capture of I/O leverages Intel SGX for trusted execution of applications.
+Therefore we provide a brief overview of SGX to aid understanding of this work.
+
+SGX (Software Guard Extensions) has been commercially available since 2015 as part of Intel’s Skylake series of processors.
+SGX enables an application to create an inverse sandbox wherein a portion of application memory, called an enclave is protected from the rest of the system, including the OS, hypervisor and SMM software.
+Enclave memory is also protected from direct access by peripheral devices.
+SGX hardware guarantees the confidentiality and integrity of the contents (code and data) of the enclave.
+
+SGX enclaves are provisioned and initialised by the untrusted OS in Ring-0.
+While loading the enclave its contents are cryptographically hashed by the CPU.
+The final hash value after initialisation becomes the measurement of the enclave which can be used for attestation.
+The attestation mechanism provides proof to either a local or remote party that the enclave has a specific measurement hash and that it is executing on a genuine SGX enabled CPU.
+
+Once an enclave has been initialised applications can enter and execute enclave code via a special instruction EENTER.
+A major limitation of SGX, however, is that enclave code can only be executed in ring-3 or user-mode.
+Another fundamental limitation of SGX is that instructions such as \texttt{SYSCALL} are disallowed inside enclaves since it results in a privilege switch to ring-0 mode.
+In order to access system services applications must first exit their enclave before invoking system calls.
+Therefore, without significant effort to port system code to run within enclaves ~\cite{haeven}, we cannot guarantee the security and trustworthiness of system services.
+As we shall see in the sections below, our design addresses this problem and enables trustworthy capture of I/O without requiring the whole OS to run within SGX.
+
+\subsection{Threat Model}
+We consider a powerful adversary that controls the entire software stack on a server except trusted code that runs within SGX enclaves.
+The adversary could be an untrusted administrator, a user who has gained root privileges or an outside attacker who has exploited a vulnerability to compromise the OS.
+The goals of the adversary are as follows:
 \begin{itemize}
-\item Threat Model and TCB.
-\item Use of SGX for trusted execution of applications.
-\item How data provenance is captured from application to device.
-\item APSYS'17 paper.
+\item Perform I/O to either read, modify, delete existing data in storage.
+\item Interpose I/O from other users to subvert their requests/data.
+\item Record requests in flight from genuine users and replay them at a later point in time to corrupt or rollback data in storage.
+\item Carry out these attacks stealthly by being undetectable to any OS level auditing or provenance tracking mechanism.
+\item Achieve stealth by attacking the provenance capture mechanim itself leading to circumvention or falsification of provenance.
 \end{itemize}
 
-\subsection{Prototype}
+
+Since the adversary controls all layers in the software stack, denial-of-service attacks wherein I/O requests are discarded or genuine trusted applications are not scheduled at all for execution is possible.
+Our design for I/O does not explicitly address such an attack by preventing it, instead, it ensures that even the attacker cannot perform I/O and make forward progress without being detected.
+Similarly, side-channel attacks ~\cite{sideat1, sideat2} are not addressed by our design.
+Side-channel attacks on trusted hardware is an active area of research ~\cite{sidemiti1, sidemiti2} and building side-channel defense mechanisms for I/O is a future exercise.
+Our design also does not explicitly address the problem of ensuring confidentiality of data or its provenance as this can be solved by using encryption.
+
+~\paragraph{Trusted Computing Base (TCB):}
+Our TCB consists of the SGX enabled CPU, a trusted I/O device (storage disk or network card) and all code that runs inside SGX enclaves.
+Enclave code is signed and provided by a trusted third party (for example an authorised group of auditors).
+Similarly, the trusted I/O device with a thin firmware interposition layer is also provided by the trusted third party.
+
+We assume that the attacker cannot perform physical attacks on the CPU by opening the processor package to extract secrets or corrupt its internal state.
+Similarly, we assume that the trusted I/O device cannot be reflashed or physically attacked by the adversary.
+
+\subsection{Requirements for Trustworthy Capture of I/O}
+
+Given the threat model in ~\ref{sec:threatmodel} we attempt to answer the question "What are the requirements for trustworthy capture of I/O?".
+
+We've identified three key requirements to provide this support:
+
+\begin{enumerate}
+
+% Capture must not be circumventable.
+
+% Capture must be tamper proof.
+
+% Capture should have visibility across layers of abstraction.
+
+
+
+
+\item \texttt{Capture across layers:}
+The OS presents applications with an abstracted view of I/O devices and the low-level interface required to interact with these devices.
+For example, in case of disk I/O, the disk hardware is presented as a block device where data in chunks of blocks (typically 4K per block) can be stored and retrieved.
+These chunks of blocks are in turn grouped and identified via the inode datastructure in the OS's filesystem.
+However, the view that an application has is that of a simple filename path and uses stream operations to read and write data to the file.
+Similarly, for network I/O the OS abstracts away the process of sending and receiving network packets.
+Most applications only send and receive data streams to a specific IP address and port tuple.
+Merely capturing events at the level of abstraction that an application observes is not sufficient.
+We must also capture the underlying OS-level events pertaining to the application's request in a trustworthy manner.
+
+\item \texttt{Capability based access:}
+Even if the application's I/O request and the corresponding low-level actions to service this request are captured, there is no guarantee that the OS faithfully fulfilled the request after the capture is performed.
+Once the low-level request is captured, a compromised OS may modify the parameters of the I/O request, fabricate data, throw away the request etc., causing the captured I/O information to diverge from what actually happened on the system.
+To ensure that such attacks are not possible the OS should be restricted to only perform the low-level action approved and captured.
+That is a non-forgeable capability based mechanism is necessary.
+
+\item \texttt{Verification of OS actions:}
+Once the OS obtains a capability to perform a certain low-level action on an I/O device, it can then access the underlying I/O device hardware to fulfill that request.
+However, if the I/O device does not verifying the actions of the OS, once again a compromised OS can carry out a wide variety of attacks.
+A trusted end-point device is therefore necessary to verify the OS's request against a non-forgeable capability that it provides, failing which the device can reject the OS's request.
+
+\end{enumerate}
+
+
+\subsection{NORAD Access Control}
+
+% To satisfy the requirements described in ~ref{sec:requirements} we need a reference validation mechanism that enforces an access control policy for I/O.
+We address the requirements described in ~\ref{sec:requirements} by making changes to the I/O flow in existing systems.
+To this end we introduce a new primitive for I/O, NORAD access control.
+
+\subsubsection{Design Principles} 
+Our design for NORAD access control is based on the following key principles.
+
+\begin{enumerate}
+\item \textbf{Secure Capture of I/O.}
+When a user-space application makes a system call, for example to write a file to disk or to send a stream of data over the network, we must capture this event.
+To ensure that the capture is performed in a secure trusted environment, the system call capture code executes inside an SGX enclave.
+The system call capture component can be impemented as an I/O library that applications can link against or as an interposition layer that is seamless to applications.
+
+In addition to the system call capture, we also require a mechanism to capture the low-level actions that the OS performs securely to service the system call.
+To achieve this, we introduce the concept of an \texttt{Arbiter}.
+The \texttt{Ariter} is a non-forgeable, non-bypassable, evaluable user-space process that executes inside an SGX enclave.
+The security properties provided by SGX ensures the integrity, confidentiality and freshness of the contents (code and data) of the Arbiter.
+The low-level operations pertaining to a I/O related system call are captured by the Arbiter.
+In case of disk I/O, the Arbiter captures the block-level reads and writes as the untrusted OS is forced to provide this information in order to make forward progress.
+Similarly, for network I/O the Arbiter captures details about individual packets as the OS sends or receives packets to/from the network device.
+
+However, this implies that we trust the underlying OS to perform the correct low-level operation.
+A compromised OS may not necessarily perform the right low-level operation pertaining to a system call request.
+To understand this point, lets take the example of file I/O.
+When a file is opened and read by an application, an in-kernel filesystem fetches the right sets of blocks representing the file's data from storage.
+This is possible since the file system maintains the metadata (inodes, directory entry etc.) that maps the file to its block-level representation on the storage device.
+In a compromised OS there is no guarantee that this metadata is correctly maintained.
+Therefore, even if we faithfully record the low-level operation, in this case of the file system, the recorded information may not be useful.
+To reason about what happened to data on the storage device we require internal knowledge of the semantics (file to blocks mapping for example) of the file system.
+
+In our design we address this problem, by moving critical parts of the OS to run within the Arbiter while still ensuring that the Arbiter is reasonably small and evaluable.
+In case of the file I/O, we can implement a simple block-based file system that runs entirely inside the Arbiter using existing user-space file system frameworks such as FUSE ~\cite{FUSE}.
+This ensures that I/O operations across layers of abstractions are captured in a trustworthy manner.
+
+\item \textbf{Token Generation.}
+The Arbiter is a user-space process, therefore interfacing with I/O hardware directly is a challenge.
+Barring special cases ~\cite{kernelbypass, inteldpdk}, access to hardware still requires mediation via the OS.
+The device drivers managed by the OS interface with hardware devices to perform the relevant operations.
+Therefore, a compromised OS could still tamper with the low-level operation parameters, causing the captured I/O information to differ from the actual I/O activity.
+
+To mitigate against such attacks the Arbiter generates a non-forgeable \texttt{token} (or capability) and hands it to the OS.
+The OS is then forced to use this \texttt{token} in order to make forward progress.
+Tokens for low-level operations can be generated using cryptographic primitives such as Message Authentication Codes (MAC) or Digital Signatures ~\cite{MAC, DigitalSig}.
+
+The OS cannot proceed to perform the required I/O operation without acquiring this token.
+This is discussed in ~\ref{sec:trustediodevice}.
+
+\item \textbf{Device-level Verification.}
+To ensure that the OS only requests for the device-level operation that is approved by the Arbiter, we require a I/O device to verify the intentions of the OS.
+The I/O device used as part of NORAD access control therefore has a thin modified firmware layer which checks the authenticity, integrity and freshness of the device-level request against the token provided.
+The device can in turn generate an acknowledgement which can be handed back to the application confirming the success/failure of the I/O operation.
+
+\end{enumerate}
+
+\subsubsection{Access Control Protocol}
+Combining the three design principles in ~\ref{sec:designprinciples}, we now describe the NORAD access control protocol using disk I/O as an example.
+
+First, we define the terminologies used in the protocol.
+Then, we briefly describe the various entities involved in I/O before proceeding to explain the protocol with the help of figures ~\ref{fig:noradhld} and ~\ref{fig:noradproto}.
+
+\paragraph{Terminologies:}
 \begin{itemize}
-\item Library to perform raw block reads and writes.
-\item Emulation of firmware on a stackable block device driver.
+\item \underline{Key:} A secret symmetric key shared between two trusted entities.
+\item \underline{MAC:} A cryptographic primitive used to check the authenticity and integrity of messages.
+\item \underline{Nonce:} A unique integer value provided as part of a message to ensure freshness of the message.
+\item \underline{Enclave:} A secure region of memory whose integrity, confidentiality and freshness is protected by Intel SGX hardware.
 \end{itemize}
+
+\paragraph{Entities:}
+The NORAD access control protocol for I/O primarily inolves communication between four key entities in the system.
+\begin{itemize}
+\item \textbf{Application:} User-space processes performing I/O on the trusted storage device.
+The application invokes system calls to to the untrusted OS to access data on the trusted storage device.
+
+\item \textbf{Untrusted OS:} The untrusted OS executes with ring-0 privileges, manages hardware device and services applications requests.
+
+\item \textbf{Arbiter:} A process executing with ring-3 privileges.
+The Arbiter implements a simple block-based filesystem and captures the block-level I/O requests to the trusted storage device.
+It also generates a non-forgeable \texttt{token} for each block-level operation performed by the OS.
+
+\item \textbf{Trusted Storage:} A storage device containing firmware functionality to verify OS provided block-level requests against the Arbiter generated token.
+
+\end{itemize}
+
+
+\paragraph{Bootstrap and Setup:}
+We boot an uncompromised signed kernel image.
+The system is initially disconnected from the network.
+A trusted storage device, provided by authorised auditors, is initialised by the kernel as part of the boot process.
+
+The trusted storage contains two partitions,
+(i) to store user and application data and
+(ii) to store system call and block level request data as provenance.
+The trusted storage device also contains a modified firmware layer and a secret key $K_D$.
+
+The auditors also provide 
+(i) a library $L_D$ that applications are required to link against to invoke disk I/O operations and
+(ii) an executable for the Arbiter process implementing a block-based filesystem.
+Both the library and the Arbiter are trusted and execute within an Intel SGX enclave.
+
+The Arbiter binary is provisioned with the same key $K_D$ as that of the trusted storage device.
+This provisioning is performed by the trusted auditors when the binary for the Arbiter is compiled.
+The confidentiality of the key $K_D$ is ensured by encrypting the key using SGX's sealing ~\cite{sgxsealing} functionality.
+Only enclaves with the auditor's signing identity (based on MRSIGNER ~\cite{mrsigner} value) can unseal the key.
+
+The trusted storage device and the Arbiter also initialise a nonce $N_D$.
+The nonce enables both the Arbiter and the trusted storage to check the freshness of messages exchanged via the untrusted OS.
+The simplest scheme is to initialise the $N_D$ to zero during boot.
+$N_D$ is incremented in lock-step by both the Arbiter and the trusted storage device for each request/response message.
+
+When the Arbiter process is started it mounts the filesystem from trusted storage by reading its superblock information.
+The process of reading the superblock uses the same access control protocol discussed in ~\ref{sec:diskioflow}.
+
+In order to ensure that all requests reach the Arbiter, caching (buffer cache, inode cache etc.) at the virtual file system layer (VFS) are disabled.
+
+Once this setup is complete the system can be connected to the network and users can begin executing their applications.
+After this point the OS is potentially vulnerable to attacks.
+
+\paragraph{Loading Applications:}
+Applications requiring access to trusted storage link against the library $L_D$ to invoke I/O operations.
+As shown in figure ~\cite{fig:noradhld}, the library executes as part of the application's address space but within an SGX enclave.
+When an initialisation routine is invoked, the library $L_D$ requests a key $K_A$ and an application specific nonce $N_A$ from the Arbiter process.
+This is done via a shared memory region that the application shares with the Arbiter, refer figure ~\cite{fig:noradhld}.
+To ensure confidentiality of key $K_A$, the Arbiter seals the key using SGXs sealing functionality before writing it to shared memory.
+The library $L_D$ can unseal this key inside the enclave.
+The nonce $N_A$ is incremented by both the application and the Arbiter in lock-step as each system call is invoked via the library $L_D$.
+This ensures checking the freshness of system call information captured by the trusted library $L_D$.
+
+\subsubsection{Disk I/O Flow:}
+
+To understand how a file I/O request and response works let us look at an example of a process that opens a file and writes data to it.
+We assume that the file is opened with the \texttt{SYNC} flag as this ensures that the data is physically written to the underlying storage device before the application can proceed further.
+The steps in the protocol for each of these operations is illustrated in figure ~\ref{fig:noradproto}.
+
+% File open for writing example
+The steps 1-8 shown in figure ~\ref{fig:noradproto} explains the steps when the \texttt{open} system call is called on file \texttt{F}.
+File \texttt{F} is stored on the primary partition in the trusted storage device.
+
+\begin{enumerate}[Step 1:]
+
+\item When an application invokes the \texttt{open} system call, the syscall data consisting of file name, flags and mode are captured by the trusted library $L_D$.
+The library also generates a MAC of the syscall data using key $K_A$ and nonce $N_A$.
+The syscall request along with its identity (e.g. pid) and MAC is passed to the kernel.
+
+\item The syscall is serviced via the VFS in the untrusted kernel. The VFS forwards the request to the Arbiter (file system) process along with its MAC.
+
+\item The Arbiter validates the request from VFS (syscall request) against its MAC using key $K_A$ and nonce $N_A$ and if successful forwards the request to the file system executing as part of its address space.
+If the file system does not contain the file meta-data in its cache, it initiates a request to read meta-data blocks, $B_M$ from trusted storage.
+The Arbiter generates a \texttt{token} (MAC) for block request $B_M$ along with its corresponding syscall data $S$ using key $K_D$ and nonce $N_D$.
+The request data and token are provided to the kernel.
+
+\item The block layer in the kernel forwards the Arbiter provided request and token to the trusted storage device via the appropriate device driver.
+
+\item The storage device validates the request data against the token provided by the kernel.
+If successful, the appropriate blocks are fetched and returned back as response to the Arbiter via the kernel along with a MAC of the response using key $K_D$ and an incremented nonce value $N^\prime_D$.
+The request (block and syscall information) is logged as provenance in a seperate internal partition that the kernel cannot write to.
+
+\item Once the Arbiter (filesystem) validates the response from the trusted storage, the kernel generates a file descriptor (fd) as a response for the \texttt{open} syscall.
+This information is again provided to the Arbiter for attestation.
+
+\item The Arbiter ties the \texttt{fd} to the \texttt{open} syscall request and generates a MAC using key $K_A$ and incremented nonce $N^\prime_A$.  
+
+\item The kernel returns the \texttt{fd} back to the application along with the Arbiter provided MAC as proof that the \texttt{fd} was generated for valid file meta-data.
+This is validated by the library $L_D$ using key $K_A$ and nonce $N^\prime_A$.
+
+\end{enumerate}
+
+Once the application receives a filed descriptor, it can begin writing data to the device using it as a reference.
+Steps a-h describes request and response flow for writing data to trusted storage.
+
+\begin{enumerate}[Step a:]
+
+\item When the application invokes the \texttt{write} syscall on \texttt{fd} passing it a buffer, the trusted library $L_D$ captures the request information and generates a MAC on its contents using key $K_A$ and a new incremented nonce value $N^{\prime\prime}_A$.
+
+\item The syscall $S$ is handled by VFS in the kernel and forwards the request to the Arbiter process along with its MAC.
+
+\item The Arbiter validates the request against its MAC using key $K_A$ and nonce $N^{\prime\prime}_A$.
+If successful, forwards the request to the filesystem component in its address space.
+The file system issues a block write request $B_F$ to persist the data in trusted storage.
+The Arbiter generates a \texttt{token} for request $B_F$, syscall $S$ using key $K_D$ and nonce $N^{\prime\prime}_D$.
+This \texttt{token} is then passed to the kernel to service the block write request.
+
+
+
+
+\end{enumerate}
+
+
+\subsubsection{Security Properties:}
+% Some of the security guarantees that the access control mechanism guarantees.
+
+% Non-Circumventable:
+
+% Tamper Detection:
+
+% Data Loss Detection:
+
+% Freshness:
+
+\subsection{Informal Proofs of Correctness}
+
+%TODO: Think how some of the security properties claimed above can be proved
+
+\subsubsection{Challenges:}
+% Rollback and Crash Recovery
+
+
+\subsection{Prototype Implementation}
+
+\subsection{Design for Verifiable Logging}
+
+% Verify integrity of data on storage.
+% OS must provide proof of integrity and provenance for individual blocks.
+% The Arbiter can verify this proof.
+
 
 \subsection{Evaluation}
 \begin{itemize}
