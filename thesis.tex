@@ -1,5 +1,4 @@
-%%%%%
-%%
+%%%%% %%
 %% Sample document ``thesis.tex''
 %%
 %% Version: v0.2
@@ -259,7 +258,7 @@ The ultimate goal of capturing provenance is to use it to reason about applicati
 
 \end{itemize}
 
-\section{Design Decisions} \todo{Write the section on design and implementation of OPUS here}
+\section{Design Decisions} 
 The design of OPUS is guided by the requirements outlined in ~\ref{sec:constspace}.
 The initial design is intended for on-host provenance capture, analysis and query.
 In this section we discuss our approach and some of the decisions involved in designing OPUS.
@@ -287,7 +286,6 @@ The primary advantage of using PTrace for provenance capture is that is does not
 However, PTrace imposes a high temporal overhead (~30\%) on the process being traced since the mechanism requires multiple context switches for each event being traced.
 This makes PTrace impractical for use in an always-on, system-wide provenance capture system.
 
-% TODO: Make this consistent with other paragraphs
 \paragraph{Kernel-level Tracing:}
 Over the years systems developers have recognised the need for a flexible tracing infrastructure for both the kernel and user-space applications.
 A number of mechanisms and tools ~\cite{DTrace, SystemTap, Uprobes, LXCModules} have been created to support this requirement.
@@ -311,9 +309,9 @@ However, LD\_PRELOAD assumes that applications link with the standard C library 
 For a system that captures provenance in the context of scientific computing it is reasonable to assume that most programs dynamically link with and interface with the OS using the C library. Given that this mechanism satisfies a majority of the requirements for a lightweight, userspace provenance capture system, our decision for the first version of OPUS is to employ library interposition as a method for provenance capture.
 
 
-\subsection{Provenance Analysis} % TODO: Refine this further
+\subsection{Provenance Analysis} 
 The raw provenance stream consisting of system call event data from executing programs should be converted to a meaningful representation that describes the provenance of processes, files, sockets etc.
-In previous general purpose provenance systems ~\cite{PASS, PASSv2} this has been represented as a directed acyclic graph (DAG) where the nodes represent entities such as processes and files while the edges describe the interation between these entities as shown in figure xxx.% TODO: Show a simple DAG of processes and files.
+In previous general purpose provenance systems ~\cite{PASS, PASSv2} this has been represented as a directed acyclic graph (DAG) where the nodes represent entities such as processes and files while the edges describe the interation between these entities as shown in figure xxx.\todo{Show a simple DAG of processes and files}
 OPUS uses a similar approach and collects event streams from processes executing on the machine and converts it into a provenance graph.
 However, unlike previous systems, OPUS uses a semi-formal model, PVM (Provenance Versioning Model) to map and model the undelying system semantics.
 PVM formalises the process by which entities in the graph are updated and allows us to reason about changes to these entities.
@@ -377,7 +375,7 @@ In this section we describe the system architecture of OPUS and the high level i
   \label{fig:opushld}
 \end{figure}
 
-As shown in figure ~\ref{fig:opushld} the system consists of four main components:
+As shown in figure ~\ref{fig:opushld} OPUS consists of four main components:
 \begin{itemize}
 \item A frontend that captures raw event data from user activities.
 \item A backend that analyses the raw event data and transforms them into a provenance graph.
@@ -385,7 +383,7 @@ As shown in figure ~\ref{fig:opushld} the system consists of four main component
 \item A query API that allows users to retrieve the provenance of their data and computations.
 \end{itemize} 
 
-The design of the system is such that multiple frontend instances can run simultaneously and transmit their event stream to the backend for analysis and storage.
+The design of the system allows for multiple frontend instances to simultaneously transmit their event stream to the backend for analysis and storage.
 %The initial implementation of the system for use in the context of scientific computing will use libc interposition for the events stream capture.
 %Other producers using a different method for capturing event streams, for example kernel level instrumentation can easily be plugged into the system if necessary.
 The backend for the initial phase comprises of a single analyser instance running on-host converting raw event streams into provenance.
@@ -462,7 +460,6 @@ For the initial implementation of OPUS, levelDB, a key-value store was considere
 The query API provides a wide variety of functions to retrieve provenance data from the underlying data store.
 The query API is implemented as a module that can be imported by any query tool.
 
-% TODO: from here..
 \section{Reasoning About Provenance}
 Provenance systems are designed to store the history or lineage of digital entities such as files, sockets, pipes, processes etc.
 Entities are typically modelled as objects and versioned in response to modifications by operations that change their state.
@@ -598,7 +595,7 @@ We define the following rules for versioning in the POSIX 1003 mapping:
 \item Local objects are versioned every time their attached global object versions.
 \end{itemize}
 
-\paragraph{Operation Mapping:} \todo{Expand these points}
+\paragraph{Operation Mapping:}
 
 \begin{figure}[t!]
   \centering
@@ -735,24 +732,15 @@ Python is an interpreted language and the runtime can perform several activities
 Given the provenance capture mechanism OPUS uses, it is useful to understand the impact of the mechanism on such environments.
 We run a sample python program from the BioPython package to measure the overheads imposed.
 
-We run our benchmarks with the various configurations of OPUS frontend and backend.
-The following combinations of configurations have been used:
-\begin{itemize}
-\item Full capture plus logging mode (FCLOG)
-\item Lite capture plus logging mode (LCLOG)
-\item Full capture plus PVM mode (FCPVM)
-\item Lite capture plus PVM mode (LCPVM)
-\end{itemize}
+%We run our benchmarks with the various configurations of OPUS frontend and backend.
+%The following combinations of configurations have been used:
+%\begin{itemize}
+%\item Full capture plus logging mode
+%\item Lite capture plus logging mode
+%\item Full capture plus PVM mode
+%\item Lite capture plus PVM mode
+%\end{itemize}
 
-
-
-% Analyser in logging mode, Full capture
-
-% Analyser in logging mode, Lite capture
-
-% Analyser in PVM mode, Full capture
-
-% Analyser in PVM mode, Lite Capture
 
 % We measure the overheads under various configurations for both the OPUS frontend and backend.
 % i.e. full-fat and lite modes, backend in logging mode and PVM mode.
@@ -780,16 +768,16 @@ The following combinations of configurations have been used:
 % BURRITO: 
 
 
-\begin{itemize}
-\item Temporal overheads of using OPUS. (Interposition overheads)
-\item Pathological case, \texttt{man} command. Single char reads and writes. (should this be in implementation?)
-\item Optimisations performed, aggregation, OPUS Lite etc. (implementation?)
-\item Performance evaluation of the analyser backend. Cost of DB operations.
-\item Spatial overheads: Average space used to store provenance, for scientific workloads.
-\item Comparing Neo4J with SQLite?
-\item https://docs.google.com/spreadsheets/d/13QqrShPEgjC91RKLnzcIfuliM-mZovhjO2vRkewWyJ0/edit?usp=sharing
-\item Look at how CDE was evaluated. SPEC, Real-World benchmarks.
-\end{itemize}
+%\begin{itemize}
+%\item Temporal overheads of using OPUS. (Interposition overheads)
+%\item Pathological case, \texttt{man} command. Single char reads and writes. (should this be in implementation?)
+%\item Optimisations performed, aggregation, OPUS Lite etc. (implementation?)
+%\item Performance evaluation of the analyser backend. Cost of DB operations.
+%\item Spatial overheads: Average space used to store provenance, for scientific workloads.
+%\item Comparing Neo4J with SQLite?
+%\item https://docs.google.com/spreadsheets/d/13QqrShPEgjC91RKLnzcIfuliM-mZovhjO2vRkewWyJ0/edit?usp=sharing
+%\item Look at how CDE was evaluated. SPEC, Real-World benchmarks.
+%\end{itemize}
 
 \section{Tools for Scientific Workloads}
 \begin{itemize}
@@ -815,7 +803,7 @@ The following combinations of configurations have been used:
 \end{itemize}
 
 
-\chapter{NORAD: Non-Repudiable Assertable Data I/O}
+\chapter{Trustworthy Capture of I/O}
 
 In the previous chapter, we assumed provenance is captured in a trusted environment.
 The trusted computing base (TCB) consisted of all software (user-space and kernel) and hardware on which applications executed.
@@ -965,16 +953,7 @@ We've identified three key requirements to provide this support:
 
 \begin{enumerate}
 
-% Capture must not be circumventable.
-
-% Capture must be tamper proof.
-
-% Capture should have visibility across layers of abstraction.
-
-
-
-
-\item \texttt{Capture across layers:}
+\item \texttt{Capture across layers of abstractions:}
 The OS presents applications with an abstracted view of I/O devices and the low-level interface required to interact with these devices.
 For example, in case of disk I/O, the disk hardware is presented as a block device where data in chunks of blocks (typically 4K per block) can be stored and retrieved.
 These chunks of blocks are in turn grouped and identified via the inode datastructure in the OS's filesystem.
@@ -984,24 +963,29 @@ Most applications only send and receive data streams to a specific IP address an
 Merely capturing events at the level of abstraction that an application observes is not sufficient.
 We must also capture the underlying OS-level events pertaining to the application's request in a trustworthy manner.
 
-\item \texttt{Capability based access:}
-Even if the application's I/O request and the corresponding low-level actions to service this request are captured, there is no guarantee that the OS faithfully fulfilled the request after the capture is performed.
-Once the low-level request is captured, a compromised OS may modify the parameters of the I/O request, fabricate data, throw away the request etc., causing the captured I/O information to diverge from what actually happened on the system.
-To ensure that such attacks are not possible the OS should be restricted to only perform the low-level action approved and captured.
-That is a non-forgeable capability based mechanism is necessary.
+\item \texttt{Capture must be tamper-proof and non-bypassable:}
+If we implement a mechanism that captures application I/O requests and its corresponding low-level actions in the OS there is no guarantee that capture is trustworthy.
+An adversary that controls the OS could attack the capture system itself, destroying its integrity.
+Any capture performed thereafter will be unreliable.
+Even if the capture components themselves are secure and tamper-proof an attacker that controls the OS could easily circumvent/bypass them by accessing hardware devices directly or by modifying in-flight requests to hardware post-capture.
+To mitigate against such attacks the OS should be restricted to only carry out low-level actions approved and recorded by a tamper-proof monitor.
+This leads to the requirement for a non-forgeable capability based mechanism.
 
-\item \texttt{Verification of OS actions:}
+\item \texttt{Verification by Trusted devices:}
 Once the OS obtains a capability to perform a certain low-level action on an I/O device, it can then access the underlying I/O device hardware to fulfill that request.
-However, if the I/O device does not verifying the actions of the OS, once again a compromised OS can carry out a wide variety of attacks.
-A trusted end-point device is therefore necessary to verify the OS's request against a non-forgeable capability that it provides, failing which the device can reject the OS's request.
+However, if the I/O device does not verify the actions of the OS, once again there is no guarantee that the OS fullfilled that request failthfully.
+A compromised OS could (i) throw away application requests, leading to data loss or
+(ii) modify requests at the device-driver level, leading to subversion of data or
+(iii) fabricate data as having originated from a valid hardware device.
+
+To mitigate against such attacks, a trusted end-point device is necessary to verify and acknowledge (the success or failure) the OS's request against the non-forgeable capability that it provides.
 
 \end{enumerate}
 
 
-\subsection{NORAD Access Control}
+\subsection{NORAD Access Control} 
 
-% To satisfy the requirements described in ~ref{sec:requirements} we need a reference validation mechanism that enforces an access control policy for I/O.
-We address the requirements described in ~\ref{sec:requirements} by making changes to the I/O flow in existing systems.
+To satisfy the requirements described in ~\ref{sec:requirements} we need a reference validation mechanism that enforces an access control policy for I/O.
 To this end we introduce a new primitive for I/O, NORAD access control.
 
 \subsubsection{Design Principles} 
@@ -1045,7 +1029,6 @@ The OS is then forced to use this \texttt{token} in order to make forward progre
 Tokens for low-level operations can be generated using cryptographic primitives such as Message Authentication Codes (MAC) or Digital Signatures ~\cite{MAC, DigitalSig}.
 
 The OS cannot proceed to perform the required I/O operation without acquiring this token.
-This is discussed in ~\ref{sec:trustediodevice}.
 
 \item \textbf{Device-level Verification.}
 To ensure that the OS only requests for the device-level operation that is approved by the Arbiter, we require a I/O device to verify the intentions of the OS.
@@ -1072,7 +1055,7 @@ Then, we briefly describe the various entities involved in I/O before proceeding
 The NORAD access control protocol for I/O primarily inolves communication between four key entities in the system.
 \begin{itemize}
 \item \textbf{Application:} User-space processes performing I/O on the trusted storage device.
-The application invokes system calls to to the untrusted OS to access data on the trusted storage device.
+The application invokes system calls to the untrusted OS to access data on the trusted storage device.
 
 \item \textbf{Untrusted OS:} The untrusted OS executes with ring-0 privileges, manages hardware device and services applications requests.
 
@@ -1084,6 +1067,13 @@ It also generates a non-forgeable \texttt{token} for each block-level operation 
 
 \end{itemize}
 
+
+\begin{figure}[t!]
+  \centering
+    \includegraphics[width=1.0\columnwidth]{noradhld}
+  \caption{NORAD I/O}
+  \label{fig:noradhld}
+\end{figure}
 
 \paragraph{Bootstrap and Setup:}
 We boot an uncompromised signed kernel image.
@@ -1114,21 +1104,31 @@ When the Arbiter process is started it mounts the filesystem from trusted storag
 The process of reading the superblock uses the same access control protocol discussed in ~\ref{sec:diskioflow}.
 
 In order to ensure that all requests reach the Arbiter, caching (buffer cache, inode cache etc.) at the virtual file system layer (VFS) are disabled.
+Instead, these caches are maintained by the filesystem implemented inside the Arbiter.
 
 Once this setup is complete the system can be connected to the network and users can begin executing their applications.
 After this point the OS is potentially vulnerable to attacks.
 
+\todo{Redo image according to the description}
+
 \paragraph{Loading Applications:}
 Applications requiring access to trusted storage link against the library $L_D$ to invoke I/O operations.
-As shown in figure ~\cite{fig:noradhld}, the library executes as part of the application's address space but within an SGX enclave.
+As shown in figure ~\ref{fig:noradhld}, the library executes as part of the application's address space but within an SGX enclave.
 When an initialisation routine is invoked, the library $L_D$ requests a key $K_A$ and an application specific nonce $N_A$ from the Arbiter process.
-This is done via a shared memory region that the application shares with the Arbiter, refer figure ~\cite{fig:noradhld}.
+This is done via a shared memory region that the application shares with the Arbiter, refer figure ~\ref{fig:noradhld}.
 To ensure confidentiality of key $K_A$, the Arbiter seals the key using SGXs sealing functionality before writing it to shared memory.
 The library $L_D$ can unseal this key inside the enclave.
 The nonce $N_A$ is incremented by both the application and the Arbiter in lock-step as each system call is invoked via the library $L_D$.
 This ensures checking the freshness of system call information captured by the trusted library $L_D$.
 
 \subsubsection{Disk I/O Flow:}
+
+\begin{figure}[t!]
+  \centering
+    \includegraphics[width=1.0\columnwidth]{norad_access_control}
+  \caption{NORAD access control protocol}
+  \label{fig:noradproto}
+\end{figure}
 
 To understand how a file I/O request and response works let us look at an example of a process that opens a file and writes data to it.
 We assume that the file is opened with the \texttt{SYNC} flag as this ensures that the data is physically written to the underlying storage device before the application can proceed further.
@@ -1182,41 +1182,240 @@ The file system issues a block write request $B_F$ to persist the data in truste
 The Arbiter generates a \texttt{token} for request $B_F$, syscall $S$ using key $K_D$ and nonce $N^{\prime\prime}_D$.
 This \texttt{token} is then passed to the kernel to service the block write request.
 
+\item This block write request is then provided by the kernel to the trusted storage device.
 
+\item The trusted storage firmware verfies the block request against its token.
+If successful, the appropriate blocks on physical storage are written to and modified.
+An acknowledgement message using key $K_D$ a new incremented nonce value $N^\prime\prime_D$ is passed to the kernel as response.
+The request details are logged as provenance in the internal partition against the respective blocks.
 
+\item The Arbiter validates the device acknowledgement against its token.
+
+\item The acknowlewdgement is then tied to the corresponding syscall request made by the application.
+A MAC of this information is generated using key $K_A$ and incrmented nonce $N\prime\prime\prime_A$.
+This MAC is then passed to the kernel.
+
+\item The kernel then relays this information back to the application, which validates the response against the MAC provided.
 
 \end{enumerate}
 
-
 \subsubsection{Security Properties:}
-% Some of the security guarantees that the access control mechanism guarantees.
+We now discuss some of the security guarantees provided by NORAD access control for disk I/O.
 
-% Non-Circumventable:
+\begin{itemize}
 
-% Tamper Detection:
+\item \textbf{Non-Bypassability:}
+All disk I/O to trusted storage must use the NORAD access control mechanism.
+Direct access to trusted storage, bypassing the access control mechanism, will be detected and rejected by the trusted storage device.
+This is guaranteed by the protocol since the trusted storage device verifies requests against a non-forgeable token (MAC).
+Tokens can only be generated by a tamper-proof Arbiter that shares a secret key with the trusted storage device.
+Non-bypassability provides us the assurance that the audit history for blocks and files (comprising of request details) is always captured.
 
-% Data Loss Detection:
+\item \textbf{Tamper Detection:}
+All application generated syscalls to the trusted storage are captured and a non-forgeable MAC of this syscall information is used to detect any tampering to the syscall information in-flight.
+Similarly, the block-level events generated by the filesystem (Arbiter) are captured along with a MAC of the request data.
+Again, any tampering of block-level requests can be detected.
 
-% Freshness:
+\item \textbf{Data Loss Detection:}
+The trusted storage provides an acknowledgement back to the Arbiter for each block-level request handled.
+Therefore, in case of writes to trusted storage, an application can verify if its writes actually reached storage.
+If a compromised OS throws away an application'w write request, it can be detected.
 
-\subsection{Informal Proofs of Correctness}
+\item \textbf{Freshness:}
+The MAC values generted in both the request and response paths use fresh nonce values.
+Nonce values are incremented each time by the sender and receiver of a message (request or response).
+This guarantees that a new MAC value is generated each time even if the rest of the data (MAC payload) remains the same.
+Even if an attacker knows the nonce value for a message, generating the right MAC value for a request/request will require knowledge of a key which is a secret that only the sender and receiver share.
 
-%TODO: Think how some of the security properties claimed above can be proved
+\end{itemize}
+
+\subsubsection{Informal Proofs of Correctness}
+
+Theorem 1. Support R represents a request to access trusted storage, R must be accompanied by valid token T in order to make forward progress. 
+
+Theorem 2. Suppose R represents an application request to access storage, any tampering with R can be detected.
+
+Theorem 3. Suppose R is a request to access trusted storage, R is always a fresh request.
+
+\todo{Complete these informal proofs}
+
 
 \subsubsection{Challenges:}
-% Rollback and Crash Recovery
+The NORAD access control protocol poses a number of challenges on existing systems.
+We discuss these challenges and possible solutions to them.
+
+\begin{itemize}
+
+\item \texttt{Increased Context Switches:}
+The Arbiter implements a block-based filesystem that reads and writes data to a block-device.
+Since the Arbiter runs in user-space, all file I/O to trusted storage adds extra context switches from kernel to user-space in both the request and response paths.
+Added to this is the cost of switching in and out of SGX enclaves.
+There are existing solutions that reduce the cost of switching in and out of SGX enclaves ~\cite{hotcalls, eleos}, however to mitigate the cost of switching between kernel and user context we need to implement a fast IPC mechanism (e.g. shared memory) for communication across privilege layers.
+
+\item \texttt{Unreliable Identifiers:}
+The I/O request data captured contains both the syscall as well as the underlying block-level request information.
+In order to use this captured information to reason about I/O activity on the system, we require identifiers such as pid, process/binary name, uid, gid, etc.
+However, the kernel provides these identifiers.
+If the kernel is compromised these labels/identifiers become unreliable.
+One solution to this problem could be to deprivilege parts of the kernel that generate these identifiers to execute within the trusted Arbiter.
+However, moving more and more functionality into the Arbiter can make its code complex and prone to bugs, and introduce added runtime overheads.
+These trade-off needs to be understood and evaluated.
+
+\item \texttt{Dealing with Asynchrony and reordering of requests:}
+In our design entities involved in file I/O increment nonce values after each request-response cycle either in lock-step.
+However, this assumes that all I/O operations happen synchronously.
+In reality most OS I/O schedulers reorder requests to the device and perform I/O asynchronously for performance reasons.
+This breaks our initial assumption and can cause nonce values to go out of sync.
+A solution to this problem is to maintain a sliding window of acceptable nonce values (window size could be based on the block device queue size) instead of just expecting a higher nonce value than previously seen.
+
+\end{itemize}
+
+\subsubsection{NORAD Access Control Prototype Implementation}
+The prototype implementation of NORAD access control consists of a user-space library, NORADlib (approx. 1300 lines of C and C++ code) and a kernel module (approx. 700 lines of C).
+There are no changes to existing kernel source code and drivers.
+Application requiring trustworthy capture of I/O must use the NORADlib API.
+The kernel module is implemented as a stackable block device driver that exposes a virtual device representing trusted storage.
+The virtual device overlays an actual target physical device.
+
+Since this is a proof-of-concept implementation, we emulate the firmware extension functionality to validate requests within the stackable block driver.
+The firmware emulation code is small and lightweight layer that interposes existing device firmware's request handling functionality.
+
+The prototype is only used to evaluate the performance overheads imposed by NORAD access control in the disk I/O path. 
+To guarantee the security properties discussed in section~\ref{sec:secproperties} a storage device with an extensible firmware must be used.
+
+\paragraph {Simiplification of the design:}
+We simplify the design of NORAD access control by moving the functionality of the Arbiter into NORADlib.
+NORADlib implements an API to access a raw block device and perform append only operations on blocks.
+Filesystems and applications like databases read and write blocks directly, therefore this simplification to the design serves to evaluate such systems.
+
+\paragraph {Using NORAD Access Control:}
+When an application invokes the NORADlib API, it opens a virtual block device using the \texttt{O\_DIRECT} flag.
+This provides the library raw access to the device to read/write blocks directly, bypassing the kernel VFS layer and any caching.
+Caching of reads and buffering of writes is implemented within the library.
+NORADlib runs inside an SGX enclave and is provisioned with a secret symmetric key shared with the trusted device and an initial nonce value.
+The library uses Intel SGX SDK (version 1.7) internally to implement enclave functionality.
+A high performance MAC algorithm, VMAC ~\cite{vmac} (ported to run inside SGX enclave) is used by the library to compute MACs (tokens) for block request and response messages.
+
+For each block request, the library genertes a tokens and passes it to the underlying device driver (emulating the firmaware extension) via an \texttt{ioctl}.
+The driver verfies each request by computing a MAC of the request contents and comparing against its corresponding token.
+In the response path, the driver generates a similar token for the contens of the response which is read by the library using another \texttt{ioctl} and verified.
+
+A performance evaluation of our prototype is discussed in ~\ref{sec:noradacceval}
+
+\section{Applications of NORAD Access Control}
+
+Once a primitive like NORAD access control is available, a number of use-cases are possible.
+Take for example the logging of financial transactions in banks as part of a government mandate or storing system level activities in a cloud for regulatory compliance or logging of events from a distributed system to build provenance of data.
+All these activities involves logging of data in a non-repudiable manner.
+This kind of data logging is usually append only and has the property that it is immutable.
+That is the data is only written once but read many times.
+Traditionally WORM storage devices and servers provided this property of immutability, but only for data at rest.
+NORAD access control on the other hand allows verification of the integrity of requests and data when they are in flight.
+When combined with a secure trusted filesystem that implements WORM or COW (copy-on-write) semantics, NORAD access control can be used to implement such non-repudiable logging solutions where authenticity and integrity of data in-flight and at rest are guaranteed.
+
+However, NORAD access control requires the use of a trusted storage device.
+The trusted storage runs a modified firmware that verifies the authenticity and integrity of each device access request that the OS provides.
+All data and audit information (request details) for each block is then stored on the trusted device.
+
+The use of a trusted storage device to store all application data poses a major shortcoming.
+A number of vendor specific device firmware code has to be understood and augmented to implement the functionality to validate requests.
+Most firmware implementations are proprietary, with no access to their source code.
+Therefore, scaling the design (of NORAD access control) to work with various vendor specific implementations is hard.
+\texttt{Is there a way to reason about the trustworthiness of data without requiring the data to reside on trusted storage?}
+We attempt to address this question in this section and discuss the design for a verifiable logging solution using NORAD access control.
+This design is based on several key insights which we now discuss.
 
 
-\subsection{Prototype Implementation}
+\subsection{Key Insights}
 
-\subsection{Design for Verifiable Logging}
+\begin{itemize}
 
-% Verify integrity of data on storage.
-% OS must provide proof of integrity and provenance for individual blocks.
-% The Arbiter can verify this proof.
+\item NORAD access control provides the security properties of non-bypassability, tamper-detection, data-loss detection and freshness of requests ~\ref{sec:secproperties}.
+Barring the property of non-bypassability the other three security properties essentially guarantee integrity of data.
+This integrity check is however performed eagerly (during an I/O request/response flow) by the NORAD access control protocol.
+Instead of detecting integrity violations eagerly when the I/O operation is in flight, detecting integerity violation lazily during a read operation is sufficient in most cases.
+
+\item In order to detect integrity violations lazily, during reads, a cryptographic proof of the integrity of data blocks must be provided.
+If this proof if provided by the untrusted OS, it can be verified by a secure trusted entity against a secure copy of the proof that it maintains.
+
+\item The proof can be updated and maintained by the trusted entity in memory and persisted to trusted storage periodically.
+
+\item The NORAD access control mechanism can be used to guarantee persistence of this proof in trusted storage.
+
+\item The storage requirement for the proof itself is much lesser when compared to the actual data.
+This enables us to store the proof on a small trusted device.
+
+\end{itemize}
+
+\subsection{Verifiable Logging}
+We describe a mechanism for verfiable logging when both the OS and the data storage medium are untrusted using figure ~\ref{fig:verilog}.
+
+\paragraph{Logging Service:}
+Consider a logging service that accepts an encrypted stream of events from machines in a distributed system.
+The job of of the logger is to receive the data and store it on disk so that it can be processed asynchronously by other applications.
+Since the OS is untrusted, the integrity of the contents (code and data) of the logger must be protected.
+We can ensure its integrity by running the logging service withing an SGX enclave.
+A secure (TLS) connection to the logging service can be established from the outside to provide data to be logged.
+Running the logger within an enclave and using TLS to receive data from the network ensures the integrity of the logger and the data it receives.
+However, a compromised OS could still perform denial-of-service attacks by not scheduling the application at all or by not allowing the TLS connection to be established in the first place.
+Addressing such types of attacks is beyond the scope of this discussion.
+
+\paragraph{Storage Organisation:}
+Unlike the NORAD access control mechanism, for verifiable logging we use an untrusted storage and a small amount of trusted storage.
+The untrusted storage consists of two partitions,
+(i) a data partition where the event streams are logged and
+(ii) a partition to store a merkel tree as proof of integrity of each data block.
+The size of each partition can be decided based on the amount of data required for storage.
+For example, if the maximum size of the data partition is 1TB, with 4K as the maximum block size, we have over 268 million blocks.
+If we use a 256 bit hash and a branching factor of 128 (since a 4K block would then hold 128 hashes), we would require less than 10GB of space to store the merkel tree.
+
+The trusted storage can be any device such as a TPM chip or a removable USB stick with a firmware interposition layer to implement the verification required for NORAD access control protocol.
+The trusted device only stores the merkel root, a secret key and nonce value and requires very little capacity.
+The secret key and nonce are shared with an Arbiter type mechanism as described in the NORAD access control protocol.
+This initial setup of keys and nonces between the Arbiter and the trusted storage is the same as described in ~\ref{sec:noradboot}.
+In order to perform I/O on the trusted device the Arbiter and the OS must use the NORAD access control protocol ~\ref{sec:noradproto}.
+
+\paragraph{Arbiter:}
+The Arbiter executes a simple block-based user-space file system implementing WORM semantics.
+Files can only be written in append mode and remain read-only during their term-immutable period.
+This makes bookkeeping relatively simple for the filesystem as file blocks are always written sequentially.
+The Arbiter runs inside an SGX enclave and is considered a trusted entity.
+The meta-data for the file system is stored on the untrusted device, therefore the file system formatting and mounting procedures also uses the same process for writing and reading meta-data blocks as described in ~\ref{sec:readwriteblocks}.
+The Arbiter also uses the NORAD access control protocol to read and write the value of the merkel tree root to trusted storage periodically.
+
+\subsubsection{Writing and Reading Blocks}
+In order to write blocks to untrusted storage, the logging service must link against the trusted NORADlib library ~\ref{sec:noradloadappln} and invokes its API.
+This is similar to the procedure used in NORAD access control protocol.
+A MAC of the contents of the system call request is captured securely and passed to the Arbiter via the untrused OS.
+The Arbiter verfies the authenticity and integrity of the system call and invokes the corresponding block write request to untrusted storage.
+
+The OS services the request by writing block(s) to the data parition on untrusted storage.
+The OS also maintains a merkel tree representation of the hashes of each block on a seperate partition.
+If the OS returns a successful response, the Arbiter updates its own copy of the merkel tree in memory.
+The root of the merkel tree is periodically persisted to trusted storage using NORAD access control protocol described in ~\ref{sec:noradproto}.
+
+When an application requests blocks to be read from storage, the OS is forced to provide a proof along with the contents of the block back to the Arbiter.
+This can be explained with an example.
+Consider the merkel tree in figure ~\ref{fig:merkeltree} where the leaf nodes represent the acutal blocks in storage.
+When block $B$ is read from untrusted storage, the OS must provide $h(A)$ and $h(C,D)$ back to the Arbiter.
+The Arbiter can then compute the \texttt{root} hash using $h(B)$, $h(A)$ and $h(C,D)$.
+If successful the Arbiter can return the data from block $B$ back to the application.
+
+\subsubsection{Recovering from Crashes}
+One of the disadvantages of the Arbiter maintaining its own copy of the merkel tree is that in the event of a crash (of the system or the Arbiter) the merkel tree maintained by the Arbiter can go out of sync with its on-disk representation.
+A few scenarios can cause this to happen.
+Consider a block write event, if the OS successfully writes a block to the untrusted storage and the Arbiter crashes before the it can update its copy of the merkel tree, the merkel tree and its root will be different.
+Similarly, if the Arbiter crashes before it can persist the latest value of the merkel root to trusted storage, it will read the older value of the merkel root when restarted.
+The same scenarios are true in case of the OS crashing as well.
+One approach to recovering from such crashes is based on the fact that we use a file system that implements append-only semantics.
+To restore the merkel tree, on restart, the Arbiter can read the last known pristine value of the root hash from trusted stroage and recompute the hashes for each block starting from \texttt{block0} until the correct root hash value is computed.
+This ofcourse is a very expensive operation and only works if (i) crashes do not happen very often and (ii) the blocks used to compute the last known correct root hash value are not tampered.
+Another solution is to have the Arbiter persists the intermediate hash values in the merkel tree in addition to the root hash.
+This has the advantage that the integrity of specific sets of blocks can pertaining to a given intermediate hash can be checked, allowing for data to be recovered partially.
+The disadvantage is that more data needs to be stored on the trusted storage device, potentially causing higher overheads.
 
 
-\subsection{Evaluation}
+\section{Performance Evaluation}
 \begin{itemize}
 \item Latency and Throughput compared to \texttt{dd} performing direct I/O.
 \item Use of different block sizes.
