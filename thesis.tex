@@ -175,8 +175,8 @@ produced by the computation.
 \item In this thesis I explore the fundamental primitives required to build systems that offer provenance as a first-class construct
 of systems.
 \item To this end I focus on two systems:
-(i) OPUS: A system for adding control-flow provenance to scientific computational pipelines.
-(ii) NORAD: Non-repudiable assertions for disk I/O. NORAD is a system for asserting about data-flow in a computational system.
+(i) OPUS: A system for adding data and computational provenance support for scientific computational pipelines.
+(ii) NORAD: Non-repudiable assertions for disk I/O. NORAD is a system that provides assurances about the trusworthiness of data in a computational system.
 \item For each of these systems I provide real-world engineering systems and outline the design-space, implementation and use-cases for these systems.
 \item I conclude by offering a look into further directions.
 \end{itemize}
@@ -229,7 +229,7 @@ This manual process is however prone to errors and often not complete, resulting
 Provenance systems ~\cite{PASS, BURRITO, StoyBook} in the past have attempted to automate this effort and ease the process of reproducibility by automatically tracking data and computation.
 However, these systems have lacked adoption in the real-world and have merely resulted in being research or experimental prototypes.
 This is primarily because these systems are not widely available or easily deployable in practice.
-Most of these systems require changes to the existing workflows, require modification to the underlying OS or require the use of specialised systems.
+Most of these systems require changes to existing workflows, require modification to the underlying OS or require the use of specialised systems.
 Our goal is to design and implement a lightweight, general purpose provenance system that has a minimum barrier to entry, especially in the context of scientific computing.
 To this end, we have designed OPUS, a provenance system that is designed to work entirely in user-space and is based on several key design constraints discussed in the next section ~\ref{sec:constraints}.
 
@@ -253,8 +253,8 @@ Scientific applications are typically executed multiple times and each run can p
 \item \textbf{Completeness:} 
 Existing systems record only a subset of operations applications perform on files and processes. This restricts the range of provenance queries that one can implement. To support a richer set of queries OPUS should be designed to capture all file and process relatede operations. Also, merely capturing file and process interactions ignores the execution context (library versions used, command line parameters used, environment variables etc.) in which these operations were done. Therefore the mechanism OPUS uses should capture the surrounding execution context as well. 
 
-\item \textbf{Reasoning about provenance:} \todo{This needs a rewrite}
-The ultimate goal of capturing provenance is to use it to reason about application execution and data used or produced. However, provenance is itself represented and stored as data, therefore we require a structured mechanism to reason about provenance data as it is recorded and stored. Existing systems are either rigid or use ad-hoc approaches to record and store provenance. In order for provenance to be useful and effective, we require a more formal approach to reason about the provenance data itself. In section ~\ref{sec:pvm} we discuss PVM, a semi-formal model for representing provenance.
+\item \textbf{Reasoning about provenance:}
+The ultimate goal of capturing provenance is to use it to reason about application execution and data used or produced. However, provenance is itself represented and stored as data, therefore we require a structured mechanism to reason about provenance data as it is recorded and stored. Existing systems are either rigid or use ad-hoc approaches to record and store provenance. In order for provenance to be useful and effective, we require a more formal approach to reason about the provenance data itself. In section ~\ref{sec:pvm} we discuss PVM, a semi-formal model for generating and representing provenance.
 
 \end{itemize}
 
@@ -418,20 +418,6 @@ OPUS uses the interposition function to capture raw provenance information such 
 The program context uniquely identifies the program/thread instance along with a monotonic timestamp to indicate the start and end of the event etc.
 This raw provenance data is then packaged using Google's protocol buffers and sent to the backend for further processing.
 
-Conceptually, implementing an interposition library is relatively straightforward.
-It involves defining relevant functions with the same symbols as the target library functions, capturing the required arguments, calling the original function implementation and storing the return value.
-However, in practice there are several technical challenges that arise while implementing a practically usable interposition library for capturing provenance:
-
-\begin{enumerate}
-\item \texttt{Growing Interposition Requirements:} Unlike system call interception, library call interposition requires implementing wrapper functions for all visible symbols. To understand this consider the \texttt{read} system call in the libC API. Figure ~\ref{fig:callchain} shows a sub-graph containing various paths through which the \texttt{read} function can be reached from withing the libC call graph. 
-Here, merely interposing the final \texttt{read} function (also called stem function) does not result in interposing all other variants of the function since the \texttt{read} symbol is declared PROTECTED. The PROTECTED attribute ensures that internal calls in libC are computed at compile time instead of resolving at run-time.
-This results in an explosion in interposition requirements since the a typical libC library implementation has over 1500 symbols that can be overridden. 
-
-Manually implementing interposition for for these functions is cumbersome, not only due to the number of functions but also due to the different set of arguments and return values for each of these functions. The OPUS frontend deals with this problem by using code generating based on templating for most of the interposed functions. The details of how this is implemented is desribed in our paper ~\cite{OPUSLessons}.
-
-\item \texttt{Maintaining Semantic Equivalence with Posix:} Another major issue with interposition is that when certain functions are interposed they can cause a change to application semantics. For OPUS, this is observed in the case of two functions, \texttt{vfork} and \texttt{signal}. Interposing these functions breaks the semantics expected by the application for different reasons. Both these cases are discussed in detail in our paper ~\cite{OPUSLessons} and how OPUS addresses these problems.
-
-\end{enumerate}
 
 \subsubsection{Connection Manager}
 The OPUS backend implements a connection manager module that receives raw provenance data from applications being interposed.
@@ -448,8 +434,38 @@ The semantics of PVM is discussed in detail in section ~\ref{sec:pvm}.
 Once the PVM definition for a given action is obtained, the provenance analyser can take decisions involving versioning provenance objects, linking provenance objects based on the type of operation performed and updating relevant I/O information in the provenance system.
 This is illustrated with an example given below.
 
-These actions typically involve decision regarding versioning of provenance objects, linking provenance objects based on type of operation performed and updating relevant event information in the graph.
-As the graph is constructed, it is persisted via the storage interface described next.
+Consider a program $P$ that opens file $F$, writes some data and then closes the file. 
+These three events, \texttt{open}, \texttt{write} and \texttt{close} are received by the OPUS backend and processed by the analyser.
+
+\paragraph{Open:}
+The PVM definition for \texttt{open} returning a file descriptor value of 3 is handled as,
+$$3 = open(f):$$
+$$get(3)$$
+$$get(3, eqv(F))$$
+
+This ties a local object $3$ to process $P$.
+Then the global object $F$ along with its equivalence set (aliases) are versioned and tied to local object $3$.
+This is illustrated in ~\ref{fig:openpvm}.
+
+\paragraph{Write:}
+The \texttt{write} system call event is received for process $P$ and file descriptor $3$.
+The return value indicates the number of bytes of data written successfully.
+The \texttt{write} system call has an empty PVM definition and does not cause any versioning of PVM objects.
+However, in order to record the event, it is associated to event chain attached to the local object representing file descriptor $3$ for process $P$.
+This is shown in ~\ref{fig:write}.
+
+\paragraph{Close:}
+Finally, the \texttt{close} system call event is processed by the analyser.
+The PVM definition for this is as follows,
+$$close(3):$$
+$$drop(3, globals(3))$$
+$$drop(3)$$
+
+This results in dropping the link between the local object $3$ and its associated globals, causing all the globals to version.
+Then the link between process $P$ and local object $3$ is also dropped.
+The resulting graph is as shown in figure ~\ref{fig:close}.
+
+Function calls that modify a processes meta-data are handled as non-modifying operations and do not cause file and process objects to version.
 
 \subsubsection{Storage Interface}
 The storage interface provides an abstract interface for the analyser to store or retrieve provenance objects.
@@ -459,6 +475,28 @@ For the initial implementation of OPUS, levelDB, a key-value store was considere
 \subsubsection{Query API}
 The query API provides a wide variety of functions to retrieve provenance data from the underlying data store.
 The query API is implemented as a module that can be imported by any query tool.
+
+\subsection{Interposition Challenges} 
+
+Conceptually, implementing an interposition library is relatively straightforward.
+It involves defining relevant functions with the same symbols as the target library functions, capturing the required arguments, calling the original function implementation and storing the return value.
+However, in practice there are several technical challenges that arise while implementing a practically usable interposition library for capturing provenance:
+
+% TODO: add a sub sub section
+\begin{enumerate}
+\item \texttt{Growing Interposition Requirements:} Unlike system call interception, library call interposition requires implementing wrapper functions for all visible symbols. To understand this consider the \texttt{read} system call in the libC API. Figure ~\ref{fig:callchain} shows a sub-graph containing various paths through which the \texttt{read} function can be reached from withing the libC call graph. 
+Here, merely interposing the final \texttt{read} function (also called stem function) does not result in interposing all other variants of the function since the \texttt{read} symbol is declared PROTECTED. The PROTECTED attribute ensures that internal calls in libC are computed at compile time instead of resolving at run-time.
+This results in an explosion in interposition requirements since the a typical libC library implementation has over 1500 symbols that can be overridden. 
+
+Manually implementing interposition for for these functions is cumbersome, not only due to the number of functions but also due to the different set of arguments and return values for each of these functions. The OPUS frontend deals with this problem by using code generating based on templating for most of the interposed functions. The details of how this is implemented is desribed in our paper ~\cite{OPUSLessons}.
+
+\item \texttt{Maintaining Semantic Equivalence with Posix:} Another major issue with interposition is that when certain functions are interposed they can cause a change to application semantics. For OPUS, this is observed in the case of two functions, \texttt{vfork} and \texttt{signal}. Interposing these functions breaks the semantics expected by the application for different reasons. Both these cases are discussed in detail in our paper ~\cite{OPUSLessons} and how OPUS addresses these problems.
+
+\end{enumerate}
+
+% TODO: Expand this further. talk about the vfork. signal handling issues.
+% Talk about the libc test suite
+
 
 \section{Reasoning About Provenance}
 Provenance systems are designed to store the history or lineage of digital entities such as files, sockets, pipes, processes etc.
@@ -699,10 +737,9 @@ Similarly, the backend analyser can be configured to run in,
 OPUS is evaluated with various combinations of configuration options for both the frontend and backend.
 Each experiment is repeated ten times to account for variances in runtime due to system effects that we do not control.
 
-\subsection{Benchmarks}
+\subsection{Workloads}
 % TODO: Change the use of we here
 We evaluate the overheads of OPUS using seven applications that are representative of workloads for a scientific user.
-Our evaluation is performed on an Intel i7-6820Hq CPU at 2.70GHz with 32 GB RAM, running Ubuntu 14.04 with a Linux 4.4.0 kernel
 
 \paragraph{Package Installation:} apt-get is a commonly used package installation tool used in Unbuntu platforms and represents an I/O heavy workload.
 We execute apt-get to install and remove the GNU Scientific Library (GSL) and measure the overheads when using OPUS.
@@ -731,6 +768,16 @@ This represents a compute heavy workload.
 Python is an interpreted language and the runtime can perform several activities that are system or library call intensive.
 Given the provenance capture mechanism OPUS uses, it is useful to understand the impact of the mechanism on such environments.
 We run a sample python program from the BioPython package to measure the overheads imposed.
+
+\todo{To be completed with graphs for each application}
+
+Our evaluation is performed on an Intel i7-6820Hq CPU at 2.70GHz with 32 GB RAM, running Ubuntu 14.04 with a Linux 4.4.0 kernel.
+We run each type of workload first with OPUS disabled to setup a baseline.
+We then run all workloads with various configuration options for the frontend (Full or Light capture) and backend (Logging or PVM mode).
+
+% TODO:
+
+
 
 %We run our benchmarks with the various configurations of OPUS frontend and backend.
 %The following combinations of configurations have been used:
@@ -780,6 +827,7 @@ We run a sample python program from the BioPython package to measure the overhea
 %\end{itemize}
 
 \section{Tools for Scientific Workloads}
+\todo{To be expanded. Add screenshots of each tool output.}
 \begin{itemize}
 \item Debugging context changes. Detect changes in environment, command line params, library versions linked etc.
 \item Show the command and output snapshot.
@@ -790,9 +838,9 @@ We run a sample python program from the BioPython package to measure the overhea
 % NOTE: Maybe merge workflow tracking and archiving into one tool?
 \end{itemize}
 
-% TODO: Secure provenance?
 
 \section{Beyond Scientific Computing}
+% TODO: Complete this
 \begin{itemize}
 \item OPUS as a provenance system can be used beyond the use-case of scientific computing.
 \item The OPUS backend can consume data from any system call level tracing producer.
@@ -1230,14 +1278,15 @@ Even if an attacker knows the nonce value for a message, generating the right MA
 \end{itemize}
 
 \subsubsection{Informal Proofs of Correctness}
+\begin{itemize}
+\item \texttt{Theorem 1:} Support R represents a request to access trusted storage, R must be accompanied by valid token T in order to make forward progress. 
 
-Theorem 1. Support R represents a request to access trusted storage, R must be accompanied by valid token T in order to make forward progress. 
+\item \texttt{Theorem 2:} Suppose R represents an application request to access storage, any tampering with R can be detected.
 
-Theorem 2. Suppose R represents an application request to access storage, any tampering with R can be detected.
-
-Theorem 3. Suppose R is a request to access trusted storage, R is always a fresh request.
+\item \texttt{Theorem 3:} Suppose R is a request to access trusted storage, R is always a fresh request.
 
 \todo{Complete these informal proofs}
+\end {itemize}
 
 
 \subsubsection{Challenges:}
@@ -1415,7 +1464,7 @@ This has the advantage that the integrity of specific sets of blocks can pertain
 The disadvantage is that more data needs to be stored on the trusted storage device, potentially causing higher overheads.
 
 
-\section{Performance Evaluation}
+\section{Performance Evaluation of NORAD Access Control}
 \begin{itemize}
 \item Latency and Throughput compared to \texttt{dd} performing direct I/O.
 \item Use of different block sizes.
@@ -1434,8 +1483,8 @@ The disadvantage is that more data needs to be stored on the trusted storage dev
 \item Extend design to other forms of I/O, specifically network I/O.
 
 \item Conclusions: 
-(i) Shown that its possible to build systems for control-flow provenance and data-flow provenance.
-(ii) Building blocks for provenance as a first class construct.
+(i) Shown that its possible to build systems for track provenance of data and computations in the context of scientific computing.
+(ii) Shown that its is possible to reason about the trusworthiness of data and its provenance.
 \end{itemize}
 
 
