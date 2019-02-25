@@ -28,6 +28,9 @@
 \usepackage[numbers]{natbib}
 \usepackage{todonotes}
 \usepackage{enumerate}
+\usepackage{titlesec}
+
+\setcounter{secnumdepth}{4}
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% Thesis meta-information
@@ -231,7 +234,7 @@ However, these systems have lacked adoption in the real-world and have merely re
 This is primarily because these systems are not widely available or easily deployable in practice.
 Most of these systems require changes to existing workflows, require modification to the underlying OS or require the use of specialised systems.
 Our goal is to design and implement a lightweight, general purpose provenance system that has a minimum barrier to entry, especially in the context of scientific computing.
-To this end, we have designed OPUS, a provenance system that is designed to work entirely in user-space and is based on several key design constraints discussed in the next section ~\ref{sec:constraints}.
+To this end, we have designed OPUS, a provenance system that works entirely in user-space and is based on several key design constraints discussed in the next section ~\ref{sec:constraints}.
 
 \section{A unique constraint space}
 OPUS draws inspiration from previous approaches in building general purpose provenance systems but addresses several of their shortcomings outlined in ~\ref{sec:opusmotiv}. The design of OPUS is based on the following requiements:
@@ -383,7 +386,7 @@ As shown in figure ~\ref{fig:opushld} OPUS consists of four main components:
 \item A query API that allows users to retrieve the provenance of their data and computations.
 \end{itemize} 
 
-The design of the system allows for multiple frontend instances to simultaneously transmit their event stream to the backend for analysis and storage.
+The design of the system allows for multiple frontend instances to transmit their event stream to the backend for analysis and storage.
 %The initial implementation of the system for use in the context of scientific computing will use libc interposition for the events stream capture.
 %Other producers using a different method for capturing event streams, for example kernel level instrumentation can easily be plugged into the system if necessary.
 The backend for the initial phase comprises of a single analyser instance running on-host converting raw event streams into provenance.
@@ -482,21 +485,89 @@ Conceptually, implementing an interposition library is relatively straightforwar
 It involves defining relevant functions with the same symbols as the target library functions, capturing the required arguments, calling the original function implementation and storing the return value.
 However, in practice there are several technical challenges that arise while implementing a practically usable interposition library for capturing provenance:
 
-% TODO: add a sub sub section
-\begin{enumerate}
-\item \texttt{Growing Interposition Requirements:} Unlike system call interception, library call interposition requires implementing wrapper functions for all visible symbols. To understand this consider the \texttt{read} system call in the libC API. Figure ~\ref{fig:callchain} shows a sub-graph containing various paths through which the \texttt{read} function can be reached from withing the libC call graph. 
-Here, merely interposing the final \texttt{read} function (also called stem function) does not result in interposing all other variants of the function since the \texttt{read} symbol is declared PROTECTED. The PROTECTED attribute ensures that internal calls in libC are computed at compile time instead of resolving at run-time.
-This results in an explosion in interposition requirements since the a typical libC library implementation has over 1500 symbols that can be overridden. 
+\subsubsection{Function Capture: Stems and Variants}
+Let us assume that we are interested in files produced by programs.
+We therefore are likely to interpose the \texttt{open}, \texttt{write} and \texttt{close} functions.
+However, there are other functions such as \texttt{printf} that is a specialised version of \texttt{write} which will also need to be interposed.
+Then there are other functions like \texttt{fprintf}, \texttt{vprintf} and \texttt{vfprintf} that are slightly different in the arguments that they take.
+The tree in figure ~\ref{fig:funcalls} shows how these functions are connected together.
+The function at the base of the tree is a \texttt{stem} function while the rest of the functions are its \texttt{variants}.
 
-Manually implementing interposition for for these functions is cumbersome, not only due to the number of functions but also due to the different set of arguments and return values for each of these functions. The OPUS frontend deals with this problem by using code generating based on templating for most of the interposed functions. The details of how this is implemented is desribed in our paper ~\cite{OPUSLessons}.
+\begin{figure}[t!]
+  \centering
+    \includegraphics[width=1.0\columnwidth]{funccalls}
+  \caption{System call types}
+  \label{fig:funcalls}
+\end{figure}
 
-\item \texttt{Maintaining Semantic Equivalence with Posix:} Another major issue with interposition is that when certain functions are interposed they can cause a change to application semantics. For OPUS, this is observed in the case of two functions, \texttt{vfork} and \texttt{signal}. Interposing these functions breaks the semantics expected by the application for different reasons. Both these cases are discussed in detail in our paper ~\cite{OPUSLessons} and how OPUS addresses these problems.
+It would seem then that, even with this proliferation of variants, only the stem functions would have to be interposed as eventually all of the variants will result in calls to the stem functions.
+This however is not possible due to the symbol attribute \texttt{PROTECTED}.
+The \texttt{PROTECTED} attribute is used by library writers to prevent symbols in the library from being accidently masked by other libraries in the load order.
+When symbols are designated \texttt{PROTECTED} and referenced locally in the library, the references are resolved at compile time as opposed to at run-time.
+Therefore even if the \texttt{write} function is interposed a call to \texttt{printf} from an application which eventually calls \texttt{write} will not trigger the interposition code for \texttt{write}.
+Due to this inability to interpose calls within a library all variants for stem functions must be interposed.
 
-\end{enumerate}
+\subsubsection{Growing Interposition Requirements}
+As seen in the previous section, the number of functions that require interposition in an LD\_PRELOAD system can grow quickly.
+This is a problem since writing interposition code manually for all these functions leads to problems of maintainability of the code.
+OPUS interposes approximately 150 function symbols in the GNU C library, resulting in nearly 12000 lines of interposition code.
+Even for the best case scenario an interposition function will requires at least ten lines of code.
+Clearly an automated solution is required.
 
-% TODO: Expand this further. talk about the vfork. signal handling issues.
-% Talk about the libc test suite
+To automate this process OPUS uses code generation by means of templating.
+In OPUS a single template and a structured document is maintained for storing all of the relevant information about a given function, such as its name, arguments and return value.
+A script reads the structured document and fills out the template for each function substituting values where appropriate and including or omitting code, depending on configuration.
 
+This reduces the amount of code for each interposition function from 80 lines of C to approximately 10 lines of YAML ~\cite{YAML}.
+This also makes maintenance of the interposition library relatively easy.
+Another advantage of this approach is that interposition can be extended quickly to other libraries as well, requiring only the implementation of a supplimentary template.
+
+\subsubsection{Maintaining Semantic Equivalence}
+Interposing at the standard C library layer imposes a number of challenges.
+The primary challenge is in maintaining semantic equivalence with posix.
+For most standard C library functions implementing an interposition layer does not alter their semantics since the goal of interposition is to merely capture arguments and return values along with the runtime context.
+However, for two cases \texttt{vfork} and \texttt{signal}, adding an interposition layer breaks the semantics expected by applications for different reasons.
+
+\paragraph{vfork:}
+The POSIX standard presents us with computational abstractions such as the process and thread.
+The standard C library provides functions manage these abstractions.
+For example with the \texttt{fork} function call the specification states that a child process can be created with a copy of its parent's resources such as memory, file descriptors, environment etc.
+From an interposition standpoint it is critical to preserve this behaviour of program execution.
+OPUS does this by interposing the call to \texttt{fork}, calls the actual \texttt{fork} function in the standard C library and then collects the required metadata for provenance, such as the child pid or return value.
+However, for functions such as \texttt{vfork} using the standard method of implementing an interposition function breaks its semantics.
+\texttt{vfork} was introduced as a substitute for the \texttt{fork} system call on machines that did not have an MMU and when calling \texttt{fork} was an expensive operation.
+\texttt{vfork} does not duplicate the parent's address space, instead both parent and child share the same memory address space.
+The execution of the parent however is suspended until the child either calls \texttt{exec} or \texttt{exit}.
+On modern Linux systems applications no longer have to use the \texttt{vfork} optimization since \texttt{fork} has been reimplemented using copy-on-write pages ~\cite{robertlove}.
+However, legacy application such as bash, gcc and make still use vfork and therefore must be interposed for completeness.
+
+With \texttt{vfork} since both the parent and the child process share the same memory address space, the posix specification does not allow the child process to return from the current function calling \texttt{vfork} as it will destroy the current stack frame.
+This makes interposition problematic since the interposition function is basically a wrapper on top on the C library vfork function.
+In fact, the standard C library has the problem of preserving the stack frame as well since the vfork library function is itself a wrapper for making the vfork system call.
+To solve this problem the C library implementers have to break the function call abstraction provided by their high level language (in this case C) and implement the vfork function using assembly code.
+Within the assembly routine the return address from the function is saved in a register that is preserved across system calls.
+Thus when the child process returns, even though the stack frame is destroyed the parent process can still read the saved return address from the register.
+
+OPUS takes a similar approach and uses assembly to implement the interposition function for \texttt{vfork}.
+However, instead of storing the return address in a register, the address is stored in memory to avoid architecture dependant implementations.
+This approach has a higher overhead but makes the architecture specific part of the code much smaller.
+
+% TODO: Talk about the libc test suite?
+\paragraph{Signal Handling:}
+Capturing signalling events received by an application can be valid provenance information especially in the context where a signal causes the application to terminate, either automatically because the signal was not handled or manually where the application calls \texttt{exit} within its handler.
+The OPUS frontend intercepts such signalling events using a default signal handler and records the occurrence of the event.
+OPUS then calls the application’s signal handler if present.
+OPUS stores the application’s signal handler function address as it interposes the signal registration functions (\texttt{signal} and \texttt{sigaction}).
+
+This approach, although viable, modifies the expected behaviour of signal registration functions.
+Many coreutils programs use signal registration functions purely to determine the previous signal disposition (signal handler, masks and flags).
+The kernel maintains this information per process and returns it on query.
+By registering a default OPUS singal handler the kernel ends up returning invalid signal disposition information back to the application.
+This breaks the behaviour expected by applications and must be handled transparently by OPUS.
+
+OPUS achieves this by maintaining extra state in memory which consists of a lookup table that stores a mapping between a signal number and its current disposition.
+Therefore, when the application queries the previous signal disposition, OPUS can intercept the request and return the correct data directly from the lookup table.
+This restores semantic equivalence and makes OPUS more correct and complete.
 
 \section{Reasoning About Provenance}
 Provenance systems are designed to store the history or lineage of digital entities such as files, sockets, pipes, processes etc.
@@ -572,12 +643,48 @@ For example, in a POSIX based system a process unlinking a file being used by ot
 \paragraph{Global Objects} are system scope, uniquely identifiable logical representations of entities (e.g. files or sockets) in the system.
 PVM assigns a global object to every entity in the modelled system and versions them in response to system events.
 
-\todo{Introduce the concept of aliasing and equivalence}
-
 \paragraph{Local objects}
 In most real-world systems an executing process or thread can only perceive global objects representing entities such as files or sockets in the system via references to them.
 For example, in UNIX like systems these references are typically file descriptor handles to resources such as files, network sockets, pipes etc.
 These references are modelled in PVM as local objects and versioned corresponding to version changes in global objects.
+
+\subsubsection{Equivalence and Aliasing}
+Aliases are a common property of modern namespace management systems.
+Depending on their properties and behaviour aliases can be considered hard or soft. 
+Hard aliases are names that are purely monikers for existing names (i.e. they resolve to an identical entity) while soft aliases are entities that point to other entities in the system. 
+Soft aliases are distinguishable from hard aliases by the property that they maintain metadata independently of the object to which they point.
+
+In order to unify the provenance of an underlying global object it is necessary to model the links between aliases and the objects they point to.
+In PVM hard and soft aliases are treated as separate cases due to their properties.
+
+\paragraph{Hard Aliases} are a set of (one or more) names in the namespace which point to the same underlying physical entity.
+For example in POSIX When two file names are hardlinked they refer to the same inode structure.
+In PVM hard aliases are represented by a set of global objects.
+There is a separate global object for every alias in the set of names for the entity.
+
+\paragraph{Global Object Equivalence:} Global objects $x$ and $y$ are defined as equivalent if they are both hard aliases for the same entity.
+This is denoted by $x$ $\rightleftharpoons$ $y$.
+The relation $\rightleftharpoons$ is transitive, reflexive and symmetric.
+
+\paragraph{Global Object Equivalece Set:}
+All global objects belong to a corresponding global object equivalence set.
+A set of global objects $S$ are considered equivalent if,
+$$\forall x,y.x \in S.y \in S.x \rightleftharpoons y$$
+
+\paragraph{System Equivalence Set:}
+The system equivalence set $E$ is the maximal set of all global object equivalence sets in the system.
+For example, if global objects $x$ and $y$ form an equivalence set $S_1$, and global objects $a$ and $b$ form an equivalence set $S_2$, the set $E = {S_1, S_2}$.
+
+PVM defines the following functions for manipulation and equivalence testing.
+
+\textbf{Manipulation:}
+$$eadd(S, a):\forall g.g \in S \rightarrow a \rightleftharpoons g$$
+$$erem(S, a) \forall g.g \in S \rightarrow  \neg(a \rightleftharpoons g)$$
+
+\textbf{Equivalence Testing:}
+The function $eqv$ returns all the global objects in the global object equivalence set.
+
+$$eqv(x)={r:r \in E, x \in r}$$
 
 \subsubsection{Relationship between local and global objects}
 PVM formalises the relationship between local and global objects as follows:
@@ -707,16 +814,18 @@ In addition to the mappings defined above, the analyser also defines similar map
 Defining each mapping is beyond the scope of this document.
 
 \section{Performance Evaluation}
-In this section we evaluate the overheads of OPUS on scientific activities and workloads.
-Our scope is limited to the most common types of scientific user activities, namely, 
-package installation, file editing, code compilation, file archival/extraction, workloads requiring a runtime and finally compute intensive applications.
-Representative workloads are chosen for each of these categories.
+In this section we evaluate the overheads of OPUS when used as a provenance capture system in scientific environments.
+To this end we focus the use of OPUS in a unix-like on-host environment where a scientist may perform activities to
+edit files, compile code, install packages or run scientific applications and workloads.
+We have chosen representative workloads for each of these categories.
 
-Two aspects of the system are of interest:
+Our interest is in two aspects of the system:
 \begin{enumerate}
 \item Temporal overheads introduced by the provenance capture and analysis components on end user applications.
-\item Spatial overheads (memory and disk space) of processing and storing provenance data.
+\item Spatial overheads of storing provenance data as per our PVM model.
 \end{enumerate}
+
+% TODO: from here...
 
 To evaluate the temporal overheads we first setup a baseline for each workload with OPUS disabled.
 We then enable OPUS and run the same set of workloads in the OPUS enabled environment.
